@@ -207,6 +207,45 @@ async function testGetTaxReports() {
   }
 }
 
+// Test: Get PPO Stats
+async function testGetPPOStats() {
+  const response = await api.get('/api/ppo/stats');
+
+  if (typeof response.data.exists !== 'boolean') {
+    throw new Error('Invalid PPO stats response');
+  }
+}
+
+// Test: Get PPO Action
+async function testGetPPOAction() {
+  const response = await api.post('/api/ppo/action', {
+    state: [0.5, 0.6, 0.02, 1, 0], // Mock state
+  });
+
+  if (typeof response.data.action !== 'number') {
+    throw new Error('Invalid PPO action response');
+  }
+
+  if (!['hold', 'buy', 'sell'].includes(response.data.actionName)) {
+    throw new Error('Invalid action name');
+  }
+}
+
+// Test: Train PPO (short training)
+async function testTrainPPO() {
+  const response = await api.post('/api/ppo/train', {
+    episodes: 10, // Short training for test
+  });
+
+  if (typeof response.data.avgReward !== 'number') {
+    throw new Error('Invalid PPO training response');
+  }
+
+  if (!Array.isArray(response.data.episodeRewards)) {
+    throw new Error('Episode rewards should be an array');
+  }
+}
+
 // Test: User Logout
 async function testLogout() {
   await api.post('/api/auth/logout');
@@ -262,6 +301,9 @@ async function main() {
     await runTest('Get Trade History', testGetTradeHistory);
     await runTest('Get Analytics Performance', testGetAnalyticsPerformance);
     await runTest('Get Tax Reports', testGetTaxReports);
+    await runTest('Get PPO Stats', testGetPPOStats);
+    await runTest('Get PPO Action', testGetPPOAction);
+    await runTest('Train PPO (10 episodes)', testTrainPPO);
     await runTest('User Logout', testLogout);
 
     // Print summary

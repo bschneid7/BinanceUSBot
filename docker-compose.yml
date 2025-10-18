@@ -55,6 +55,30 @@ services:
       retries: 3
       start_period: 60s
 
+  # PPO Training Service (Run separately)
+  ppo-trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: binance-bot-ppo-trainer
+    command: node server/dist/services/tradingEngine/trainPPO.js
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeThisPassword}@mongo:27017/${MONGO_DB_NAME:-binance_bot}?authSource=admin
+      PPO_EPISODES: ${PPO_EPISODES:-1000}
+      BUY_ALLOCATION: ${BUY_ALLOCATION:-0.05}
+      TRAILING_STOP: ${TRAILING_STOP:-0.005}
+      DRAWDOWN_CAP: ${DRAWDOWN_CAP:-0.3}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - bot-network
+    volumes:
+      - ppo_models:/app/models
+    profiles:
+      - training
+
   # Nginx Reverse Proxy (Optional)
   nginx:
     image: nginx:alpine
@@ -84,6 +108,8 @@ volumes:
   mongodb_config:
     driver: local
   app_logs:
+    driver: local
+  ppo_models:
     driver: local
   nginx_cache:
     driver: local

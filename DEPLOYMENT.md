@@ -557,14 +557,105 @@ API_BASE_URL=http://your-server-ip:3000 npm run api:test
 
 ---
 
+## PPO Reinforcement Learning Setup
+
+### Prerequisites for PPO
+
+- TensorFlow.js and Python/PyTorch installed (handled by Docker)
+- Historical market data for training
+- Sufficient compute resources (GPU recommended for large-scale training)
+
+### Offline PPO Training
+
+Train the PPO agent before deploying to production:
+
+```bash
+# Method 1: Using npm script
+PPO_EPISODES=1000 npm run train:ppo
+
+# Method 2: Using Docker service
+docker-compose run ppo-trainer
+
+# Method 3: Manual training
+cd server && tsx services/tradingEngine/trainPPO.ts
+```
+
+### PPO Configuration
+
+Add to `.env.production`:
+
+```env
+# PPO Configuration
+PPO_EPISODES=1000
+BUY_ALLOCATION=0.05        # 5% capital per trade
+TRAILING_STOP=0.005        # 0.5% trailing stop
+DRAWDOWN_CAP=0.3           # 30% max drawdown
+
+# ML Sentiment (optional)
+ML_MODEL_PATH=/path/to/torch_model
+
+# Features
+STAKING_ENABLED=true
+TAX_METHOD=HIFO
+```
+
+### Automated Tasks (Cron Jobs)
+
+Setup cron jobs for automated operations:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add these lines:
+# Stake idle assets hourly
+0 * * * * cd /opt/binance-bot && npm run stake:idle
+
+# Generate tax reports weekly (Sunday midnight)
+0 0 * * 0 cd /opt/binance-bot && npm run tax:generate
+
+# Retrain PPO monthly (1st of month, 2 AM)
+0 2 1 * * cd /opt/binance-bot && docker-compose run ppo-trainer
+```
+
+### PPO Model Management
+
+**Save trained model:**
+```bash
+# Models are saved automatically to ./models/ppo/
+ls -la models/ppo/actor/
+ls -la models/ppo/critic/
+```
+
+**Load existing model:**
+```bash
+# Place model files in ./models/ppo/
+# Agent will automatically load on startup if present
+```
+
+### Monitoring PPO Performance
+
+**Check PPO stats:**
+```bash
+curl -X GET http://localhost:3000/api/ppo/stats \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**View training logs:**
+```bash
+docker-compose logs ppo-trainer
+```
+
 ## Production Checklist
 
 Before going live, ensure:
 
 - [ ] Server is properly secured (firewall, SSH keys, Fail2Ban)
-- [ ] Environment variables are set correctly
+- [ ] Environment variables are set correctly (including PPO config)
 - [ ] Admin user is created and password changed
 - [ ] Binance API keys are configured with correct permissions
+- [ ] PPO agent is trained (if using RL features)
+- [ ] Cron jobs are configured (staking, tax, retraining)
 - [ ] Database backups are scheduled
 - [ ] Monitoring is set up
 - [ ] SSL certificate is installed (if using domain)

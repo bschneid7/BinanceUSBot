@@ -20,8 +20,10 @@ A fully autonomous, headless trading bot designed for aggressive spot cryptocurr
 ### Trading Engine
 - **24/7 Autonomous Operation** - No manual intervention required
 - **Multiple Trading Playbooks** - Breakout, VWAP mean-reversion, event-driven, and dip-buying strategies
-- **Advanced Risk Management** - Position sizing, correlation guards, kill-switches
-- **Smart Execution** - Maker-first orders, slippage protection, OCO brackets, trailing stops
+- **PPO Reinforcement Learning** - Optimizes buy/sell decisions via TensorFlow.js (state: OHLCV/sentiment; actions: buy/sell/hold; rewards: profit - drawdown)
+- **Advanced Risk Management** - Position sizing, correlation guards, kill-switches, 30% max drawdown cap
+- **Smart Execution** - Maker-first orders, slippage protection, OCO brackets, 0.5% trailing stop-buy
+- **Aggressive Trading** - 5% buy allocation per signal with ML sentiment integration
 
 ### Tax Compliance
 - **Lot-Level Tracking** - HIFO (Highest-In-First-Out) cost basis calculation
@@ -34,6 +36,8 @@ A fully autonomous, headless trading bot designed for aggressive spot cryptocurr
 - **Real-Time Alerts** - System health, trading events, errors
 - **Performance Analytics** - Win rate, profit factor, equity curves, drawdown tracking
 - **Reserve Management** - Maintains 20-30% cash reserve for opportunistic trading
+- **Staking for Idle Assets** - Automatically stakes excess reserves to earn yield
+- **Tax Automation** - Weekly HIFO reconciliation and Form 8949 generation
 
 ## 🚀 Quick Start
 
@@ -73,6 +77,16 @@ JWT_SECRET=your-jwt-secret-here
 JWT_REFRESH_SECRET=your-jwt-refresh-secret-here
 BINANCE_API_KEY=your-binance-api-key
 BINANCE_API_SECRET=your-binance-api-secret
+
+# PPO RL Configuration
+PPO_EPISODES=1000
+BUY_ALLOCATION=0.05
+TRAILING_STOP=0.005
+DRAWDOWN_CAP=0.3
+
+# Optional features
+STAKING_ENABLED=true
+TAX_METHOD=HIFO
 ```
 
 4. **Seed initial data**
@@ -81,7 +95,13 @@ BINANCE_API_SECRET=your-binance-api-secret
 npm run seed:admin
 ```
 
-5. **Start development servers**
+5. **(Optional) Train PPO Agent**
+```bash
+# Train reinforcement learning agent offline
+npm run train:ppo
+```
+
+6. **Start development servers**
 ```bash
 npm run dev
 ```
@@ -195,6 +215,87 @@ npm run db:reset
 
 # Reset but keep admin user
 npm run db:reset -- --keep-admin
+```
+
+## 🤖 PPO Reinforcement Learning Integration
+
+### Overview
+
+The bot integrates PPO (Proximal Policy Optimization) reinforcement learning to optimize trading decisions. The PPO agent learns from historical data and adapts trading strategies based on market conditions.
+
+**State Space (5 dimensions):**
+- Normalized price
+- Volume
+- Volatility (ATR)
+- Sentiment (ML-based)
+- Current position
+
+**Action Space:**
+- 0 = Hold
+- 1 = Buy
+- 2 = Sell
+
+**Reward Function:**
+```
+reward = profit - (drawdown_penalty if drawdown > 30%)
+```
+
+### Training the PPO Agent
+
+**Offline Training (Recommended):**
+```bash
+# Train with default 1000 episodes
+npm run train:ppo
+
+# Train with custom episodes
+PPO_EPISODES=5000 npm run train:ppo
+```
+
+**Training via API:**
+```bash
+curl -X POST http://localhost:3000/api/ppo/train \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"episodes": 1000}'
+```
+
+### Using PPO in Live Trading
+
+The PPO agent can be queried during live trading to override static playbook rules during high volatility periods:
+
+```typescript
+// Get action from trained agent
+const state = [
+  normalizedPrice,
+  normalizedVolume,
+  volatility,
+  sentimentScore,
+  currentPosition
+];
+
+const action = await getPPOAction(state);
+// Returns: { action: 1, actionName: 'buy' }
+```
+
+### PPO Configuration
+
+Environment variables:
+```env
+PPO_EPISODES=1000          # Training episodes
+BUY_ALLOCATION=0.05        # 5% of capital per trade
+TRAILING_STOP=0.005        # 0.5% trailing stop
+DRAWDOWN_CAP=0.3           # 30% max drawdown
+```
+
+### Deployment with PPO
+
+The Docker setup includes a dedicated PPO training service:
+```bash
+# Train PPO offline before deployment
+docker-compose run ppo-trainer
+
+# Deploy with trained model
+docker-compose up -d
 ```
 
 ## 🧪 Testing

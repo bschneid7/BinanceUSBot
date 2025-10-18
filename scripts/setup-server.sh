@@ -120,6 +120,13 @@ node --version
 npm --version
 
 echo ""
+echo "🐍 Installing Python and ML dependencies (for PPO)..."
+apt-get install -y python3 python3-pip python3-venv build-essential
+echo "✅ Python installed:"
+python3 --version
+pip3 --version
+
+echo ""
 echo "📊 System Information:"
 echo "-------------------------------------------"
 echo "OS: $(lsb_release -d | cut -f2)"
@@ -135,8 +142,19 @@ echo "✨ Server setup completed successfully!"
 echo ""
 echo "📝 Next steps:"
 echo "   1. Clone your repository to /opt/binance-bot"
-echo "   2. Create .env.production file with your configuration"
+echo "   2. Create .env.production file with your configuration (including PPO params)"
 echo "   3. Run: cd /opt/binance-bot && sudo -u botuser docker compose up -d"
+echo "   4. (Optional) Train PPO: docker-compose run --rm ppo-trainer"
+echo "   5. Setup cron jobs for staking and tax generation"
+echo ""
+echo "⚙️  PPO Environment Variables:"
+echo "   Add to .env.production:"
+echo "   - PPO_EPISODES=1000"
+echo "   - BUY_ALLOCATION=0.05"
+echo "   - TRAILING_STOP=0.005"
+echo "   - DRAWDOWN_CAP=0.3"
+echo "   - STAKING_ENABLED=true"
+echo "   - TAX_METHOD=HIFO"
 echo ""
 echo "🔐 Security recommendations:"
 echo "   - Change SSH port from default 22"

@@ -1,6 +1,14 @@
 # Multi-stage build for BinanceUSBot
 FROM node:20-alpine AS base
 
+# Install Python and system dependencies for PPO/ML
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    build-base \
+    python3-dev \
+    linux-headers
+
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app
@@ -45,6 +53,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+
+# Install Python packages for ML/sentiment proxy
+RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Create a non-root user
 RUN addgroup --system --gid 1001 nodejs
