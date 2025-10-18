@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusCard } from '@/components/dashboard/StatusCard';
 import { BotStatusBadge } from '@/components/dashboard/BotStatusBadge';
@@ -19,13 +19,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadDashboardData();
-    const interval = setInterval(loadDashboardData, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       const [statusRes, positionsRes, signalsRes, alertsRes] = await Promise.all([
         getBotStatus(),
@@ -39,16 +33,23 @@ export function Dashboard() {
       setSignals(signalsRes.signals);
       setAlerts(alertsRes.alerts);
       setLoading(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading dashboard data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data';
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load dashboard data',
+        description: errorMessage,
         variant: 'destructive'
       });
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadDashboardData();
+    const interval = setInterval(loadDashboardData, 5000);
+    return () => clearInterval(interval);
+  }, [loadDashboardData]);
 
   const formatCurrency = (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const formatR = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}R`;

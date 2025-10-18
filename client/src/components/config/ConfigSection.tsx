@@ -7,7 +7,7 @@ interface ConfigField {
   key: string;
   label: string;
   type: 'number' | 'boolean' | 'text';
-  value: any;
+  value: string | number | boolean;
   description?: string;
   min?: number;
   max?: number;
@@ -18,7 +18,7 @@ interface ConfigSectionProps {
   title: string;
   description?: string;
   fields: ConfigField[];
-  onChange: (key: string, value: any) => void;
+  onChange: (key: string, value: string | number | boolean) => void;
 }
 
 export function ConfigSection({ title, description, fields, onChange }: ConfigSectionProps) {

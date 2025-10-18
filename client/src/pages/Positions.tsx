@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PositionsTable } from '@/components/dashboard/PositionsTable';
 import { getActivePositions } from '@/api/trading';
@@ -12,27 +12,28 @@ export function Positions() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadPositions();
-    const interval = setInterval(loadPositions, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadPositions = async () => {
+  const loadPositions = useCallback(async () => {
     try {
       const response = await getActivePositions();
       setPositions(response.positions);
       setLoading(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading positions:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load positions';
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load positions',
+        description: errorMessage,
         variant: 'destructive'
       });
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadPositions();
+    const interval = setInterval(loadPositions, 3000);
+    return () => clearInterval(interval);
+  }, [loadPositions]);
 
   if (loading) {
     return (

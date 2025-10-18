@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EquityCurveChart } from '@/components/analytics/EquityCurveChart';
 import { PerformanceMetricsGrid } from '@/components/analytics/PerformanceMetricsGrid';
@@ -14,27 +14,28 @@ export function Analytics() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       const [metricsRes, curveRes] = await Promise.all([getPerformanceMetrics(), getEquityCurve(30)]);
 
       setMetrics(metricsRes.metrics);
       setEquityCurve(curveRes.data);
       setLoading(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading analytics:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load analytics';
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load analytics',
+        description: errorMessage,
         variant: 'destructive'
       });
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
 
   if (loading) {
     return (

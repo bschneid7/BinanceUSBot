@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TradeHistoryTable } from '@/components/trades/TradeHistoryTable';
 import { Button } from '@/components/ui/button';
@@ -16,29 +16,30 @@ export function TradeHistory() {
   const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadTrades();
-  }, [playbookFilter, outcomeFilter]);
-
-  const loadTrades = async () => {
+  const loadTrades = useCallback(async () => {
     try {
-      const filters: any = {};
+      const filters: Record<string, string> = {};
       if (playbookFilter !== 'all') filters.playbook = playbookFilter;
       if (outcomeFilter !== 'all') filters.outcome = outcomeFilter;
 
       const response = await getTradeHistory(filters);
       setTrades(response.trades);
       setLoading(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading trades:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load trade history';
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load trade history',
+        description: errorMessage,
         variant: 'destructive'
       });
       setLoading(false);
     }
-  };
+  }, [playbookFilter, outcomeFilter, toast]);
+
+  useEffect(() => {
+    loadTrades();
+  }, [loadTrades]);
 
   const handleReset = () => {
     setPlaybookFilter('all');
