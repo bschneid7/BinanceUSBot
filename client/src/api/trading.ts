@@ -125,93 +125,29 @@ export const getPerformanceMetrics = async (): Promise<{ metrics: PerformanceMet
 // Request: {}
 // Response: { config: BotConfig }
 export const getBotConfig = async (): Promise<{ config: BotConfig }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        config: {
-          scanner: {
-            pairs: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
-            refresh_ms: 2000,
-            min_volume_usd_24h: 2000000,
-            max_spread_bps: 5,
-            max_spread_bps_event: 10,
-            tob_min_depth_usd: 50000,
-            pair_signal_cooldown_min: 15
-          },
-          risk: {
-            R_pct: 0.006,
-            daily_stop_R: -2.0,
-            weekly_stop_R: -6.0,
-            max_open_R: 2.0,
-            max_exposure_pct: 0.60,
-            max_positions: 4,
-            correlation_guard: true,
-            slippage_guard_bps: 5,
-            slippage_guard_bps_event: 10
-          },
-          reserve: {
-            target_pct: 0.30,
-            floor_pct: 0.20,
-            refill_from_profits_pct: 0.30
-          },
-          playbook_A: {
-            enable: true,
-            volume_mult: 1.5,
-            stop_atr_mult: 1.2,
-            breakeven_R: 1.0,
-            scale_R: 1.5,
-            scale_pct: 0.5,
-            trail_atr_mult: 1.0
-          },
-          playbook_B: {
-            enable: true,
-            deviation_atr_mult: 2.0,
-            stop_atr_mult: 0.8,
-            time_stop_min: 90,
-            target_R: 1.2,
-            max_trades_per_session: 2
-          },
-          playbook_C: {
-            enable: true,
-            event_window_min: 30,
-            stop_atr_mult: 1.8,
-            scale_1_R: 1.0,
-            scale_1_pct: 0.33,
-            scale_2_R: 2.0,
-            scale_2_pct: 0.33,
-            trail_atr_mult: 1.0
-          },
-          playbook_D: {
-            enable: true
-          }
-        }
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/config');
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.get('/api/config');
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch bot configuration');
+  }
 };
 
 // Description: Update bot configuration
 // Endpoint: PUT /api/config
-// Request: { config: Partial<BotConfig> }
-// Response: { success: boolean, message: string }
-export const updateBotConfig = async (config: Partial<BotConfig>): Promise<{ success: boolean; message: string }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ success: true, message: 'Configuration updated successfully' });
-    }, 500);
-  });
-  // try {
-  //   return await api.put('/api/config', { config });
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+// Request: Partial<BotConfig>
+// Response: { success: boolean, message: string, config: BotConfig }
+export const updateBotConfig = async (config: Partial<BotConfig>): Promise<{ success: boolean; message: string; config: BotConfig }> => {
+  try {
+    const response = await api.put('/api/config', config);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
+    throw new Error(err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to update bot configuration');
+  }
 };
 
 // Description: Emergency kill switch - flatten all positions and halt
