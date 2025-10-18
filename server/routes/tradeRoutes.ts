@@ -8,13 +8,13 @@ const router = express.Router();
 // Endpoint: GET /api/trades/history
 // Request: { startDate?: string, endDate?: string, playbook?: string, outcome?: string, symbol?: string }
 // Response: { trades: Trade[] }
-router.get('/history', requireUser, async (req, res) => {
+router.get('/history', requireUser(), async (req, res) => {
   try {
     console.log('[GET /api/trades/history] Request from user:', req.user._id);
 
     const { startDate, endDate, playbook, outcome, symbol } = req.query;
 
-    const filters: any = {};
+    const filters: Record<string, string> = {};
 
     if (startDate) filters.startDate = startDate as string;
     if (endDate) filters.endDate = endDate as string;
@@ -42,7 +42,7 @@ router.get('/history', requireUser, async (req, res) => {
 // Endpoint: GET /api/trades/:id
 // Request: {}
 // Response: { trade: Trade }
-router.get('/:id', requireUser, async (req, res) => {
+router.get('/:id', requireUser(), async (req, res) => {
   try {
     console.log(`[GET /api/trades/:id] Request from user: ${req.user._id}, tradeId: ${req.params.id}`);
 
@@ -71,7 +71,7 @@ router.get('/:id', requireUser, async (req, res) => {
 // Endpoint: GET /api/trades/stats
 // Request: {}
 // Response: { stats: TradeStatistics }
-router.get('/stats/summary', requireUser, async (req, res) => {
+router.get('/stats/summary', requireUser(), async (req, res) => {
   try {
     console.log('[GET /api/trades/stats] Request from user:', req.user._id);
 

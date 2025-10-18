@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { History, Filter } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
+// Trade History Component - fetches real data from backend
 export function TradeHistory() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);

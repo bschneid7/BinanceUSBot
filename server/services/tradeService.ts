@@ -22,7 +22,7 @@ class TradeService {
       console.log(`[TradeService] Fetching trade history for user: ${userId}`);
       console.log(`[TradeService] Filters:`, filters);
 
-      const query: any = { userId };
+      const query: Record<string, unknown> = { userId };
 
       // Apply filters
       if (filters) {

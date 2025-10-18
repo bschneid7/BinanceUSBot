@@ -8,7 +8,18 @@ const localApi = axios.create({
   validateStatus: (status) => {
     return status >= 200 && status < 300;
   },
-  transformResponse: [(data) => JSONbig.parse(data)]
+  transformResponse: [(data) => {
+    try {
+      // Only parse if data is a string and looks like JSON
+      if (typeof data === 'string' && (data.trim().startsWith('{') || data.trim().startsWith('['))) {
+        return JSONbig.parse(data);
+      }
+      return data;
+    } catch (e) {
+      // If parsing fails, return original data
+      return data;
+    }
+  }]
 });
 
 let accessToken: string | null = null;
@@ -72,7 +83,7 @@ const setupInterceptors = (apiInstance: typeof axios) => {
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           }
-          return localApi;
+          return localApi(originalRequest);
         } catch (err) {
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('accessToken');
