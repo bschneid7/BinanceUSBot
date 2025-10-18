@@ -39,6 +39,7 @@ class MLModelService {
         ...modelData,
         totalParams: (modelData.actorParams || 0) + (modelData.criticParams || 0),
         status: 'TRAINING',
+        performance: {}, // Initialize performance object
       });
 
       console.log(`[MLModelService] Model created: ${model._id}`);
@@ -78,6 +79,11 @@ class MLModelService {
       model.actorParams = trainingData.actorParams;
       model.criticParams = trainingData.criticParams;
       model.totalParams = trainingData.actorParams + trainingData.criticParams;
+
+      // Initialize performance object if not present
+      if (!model.performance) {
+        model.performance = {};
+      }
 
       await model.save();
 
@@ -170,6 +176,11 @@ class MLModelService {
       model.isDeployed = true;
       model.deployedAt = new Date();
       model.status = 'ACTIVE';
+
+      // Initialize performance object if not present
+      if (!model.performance) {
+        model.performance = {};
+      }
       model.performance.liveStartDate = new Date();
 
       await model.save();
@@ -196,6 +207,12 @@ class MLModelService {
 
       model.status = 'ARCHIVED';
       model.isDeployed = false;
+
+      // Initialize performance object if not present
+      if (!model.performance) {
+        model.performance = {};
+      }
+
       if (model.performance.liveStartDate && !model.performance.liveEndDate) {
         model.performance.liveEndDate = new Date();
       }
@@ -280,7 +297,16 @@ class MLModelService {
   async updateLivePerformance(userId: Types.ObjectId): Promise<void> {
     try {
       const deployedModel = await this.getDeployedModel(userId);
-      if (!deployedModel || !deployedModel.performance.liveStartDate) {
+      if (!deployedModel) {
+        return;
+      }
+
+      // Initialize performance object if not present
+      if (!deployedModel.performance) {
+        deployedModel.performance = {};
+      }
+
+      if (!deployedModel.performance.liveStartDate) {
         return;
       }
 
@@ -372,8 +398,8 @@ class MLModelService {
           id: best._id.toString(),
           version: best.version,
           avgReward: best.avgReward,
-          backtestWinRate: best.performance.backtestWinRate,
-          liveWinRate: best.performance.liveWinRate,
+          backtestWinRate: best.performance?.backtestWinRate,
+          liveWinRate: best.performance?.liveWinRate,
         };
       }
 

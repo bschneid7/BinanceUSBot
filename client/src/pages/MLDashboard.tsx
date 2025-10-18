@@ -347,13 +347,13 @@ export default function MLDashboard() {
                         </div>
                         <div className="text-sm text-muted-foreground">
                           <div>Episodes: {model.episodes} • Avg Reward: {model.avgReward.toFixed(2)}</div>
-                          {model.performance.backtestWinRate && (
+                          {model.performance?.backtestWinRate && (
                             <div>
                               Backtest: {model.performance.backtestWinRate.toFixed(1)}% WR •{' '}
                               {model.performance.backtestProfitFactor?.toFixed(2)} PF
                             </div>
                           )}
-                          {model.performance.liveWinRate && (
+                          {model.performance?.liveWinRate && (
                             <div>
                               Live: {model.performance.liveWinRate.toFixed(1)}% WR •{' '}
                               {model.performance.liveTotalTrades} trades
