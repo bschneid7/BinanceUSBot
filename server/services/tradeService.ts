@@ -27,13 +27,14 @@ class TradeService {
       // Apply filters
       if (filters) {
         if (filters.startDate || filters.endDate) {
-          query.date = {};
+          const dateFilter: { $gte?: Date; $lte?: Date } = {};
           if (filters.startDate) {
-            query.date.$gte = new Date(filters.startDate);
+            dateFilter.$gte = new Date(filters.startDate);
           }
           if (filters.endDate) {
-            query.date.$lte = new Date(filters.endDate);
+            dateFilter.$lte = new Date(filters.endDate);
           }
+          query.date = dateFilter;
         }
 
         if (filters.playbook) {

@@ -6,9 +6,10 @@ const router = express.Router();
 // Endpoint: GET /api/tax/reports
 // Request: { year?: number, status?: 'pending' | 'balanced' | 'discrepancy' } (query params)
 // Response: { reports: Array<TaxReport> }
-router.get('/reports', requireUser, async (req, res) => {
+router.get('/reports', requireUser(), async (req, res) => {
     try {
-        console.log(`[TaxReportRoutes] GET /api/tax/reports - User: ${req.user._id}`);
+        const userId = req.user._id.toString();
+        console.log(`[TaxReportRoutes] GET /api/tax/reports - User: ${userId}`);
         const { year, status } = req.query;
         const filters = {};
         if (year) {
@@ -26,29 +27,31 @@ router.get('/reports', requireUser, async (req, res) => {
             }
             filters.status = status;
         }
-        const reports = await taxReportService.getTaxReports(req.user._id, filters);
+        const reports = await taxReportService.getTaxReports(userId, filters);
         console.log(`[TaxReportRoutes] Returning ${reports.length} tax reports`);
         res.status(200).json({ reports });
     }
     catch (error) {
         console.error('[TaxReportRoutes] Error fetching tax reports:', error);
-        res.status(500).json({ error: error.message || 'Failed to fetch tax reports' });
+        const err = error;
+        res.status(500).json({ error: err.message || 'Failed to fetch tax reports' });
     }
 });
 // Description: Get a specific tax report by month
 // Endpoint: GET /api/tax/reports/:month
 // Request: { month: string } (URL param in YYYY-MM format)
 // Response: { report: TaxReport }
-router.get('/reports/:month', requireUser, async (req, res) => {
+router.get('/reports/:month', requireUser(), async (req, res) => {
     try {
         const { month } = req.params;
-        console.log(`[TaxReportRoutes] GET /api/tax/reports/${month} - User: ${req.user._id}`);
+        const userId = req.user._id.toString();
+        console.log(`[TaxReportRoutes] GET /api/tax/reports/${month} - User: ${userId}`);
         // Validate month format
         if (!/^\d{4}-\d{2}$/.test(month)) {
             console.error('[TaxReportRoutes] Invalid month format');
             return res.status(400).json({ error: 'Invalid month format. Expected YYYY-MM' });
         }
-        const report = await taxReportService.getTaxReportByMonth(req.user._id, month);
+        const report = await taxReportService.getTaxReportByMonth(userId, month);
         if (!report) {
             console.log(`[TaxReportRoutes] Tax report not found for month: ${month}`);
             return res.status(404).json({ error: 'Tax report not found' });
@@ -58,16 +61,18 @@ router.get('/reports/:month', requireUser, async (req, res) => {
     }
     catch (error) {
         console.error('[TaxReportRoutes] Error fetching tax report:', error);
-        res.status(500).json({ error: error.message || 'Failed to fetch tax report' });
+        const err = error;
+        res.status(500).json({ error: err.message || 'Failed to fetch tax report' });
     }
 });
 // Description: Create a new tax report
 // Endpoint: POST /api/tax/reports
 // Request: { month: string, equity: number, realizedPnl: number, feesPaid: number, balances: object, contentHash: string, frozen?: boolean, pdfUrl?: string, reconciliationStatus?: string, notes?: string }
 // Response: { report: TaxReport }
-router.post('/reports', requireUser, async (req, res) => {
+router.post('/reports', requireUser(), async (req, res) => {
     try {
-        console.log(`[TaxReportRoutes] POST /api/tax/reports - User: ${req.user._id}`);
+        const userId = req.user._id.toString();
+        console.log(`[TaxReportRoutes] POST /api/tax/reports - User: ${userId}`);
         const { month, equity, realizedPnl, feesPaid, balances, contentHash, frozen, pdfUrl, reconciliationStatus, notes } = req.body;
         // Validate required fields
         if (!month || equity === undefined || realizedPnl === undefined || feesPaid === undefined || !balances || !contentHash) {
@@ -81,7 +86,7 @@ router.post('/reports', requireUser, async (req, res) => {
             console.error('[TaxReportRoutes] Invalid month format');
             return res.status(400).json({ error: 'Invalid month format. Expected YYYY-MM' });
         }
-        const report = await taxReportService.createTaxReport(req.user._id, {
+        const report = await taxReportService.createTaxReport(userId, {
             month,
             equity,
             realizedPnl,
@@ -98,68 +103,75 @@ router.post('/reports', requireUser, async (req, res) => {
     }
     catch (error) {
         console.error('[TaxReportRoutes] Error creating tax report:', error);
-        res.status(500).json({ error: error.message || 'Failed to create tax report' });
+        const err = error;
+        res.status(500).json({ error: err.message || 'Failed to create tax report' });
     }
 });
 // Description: Update an existing tax report (only if not frozen)
 // Endpoint: PUT /api/tax/reports/:month
 // Request: { equity?: number, realizedPnl?: number, feesPaid?: number, balances?: object, pdfUrl?: string, reconciliationStatus?: string, notes?: string }
 // Response: { report: TaxReport }
-router.put('/reports/:month', requireUser, async (req, res) => {
+router.put('/reports/:month', requireUser(), async (req, res) => {
     try {
         const { month } = req.params;
-        console.log(`[TaxReportRoutes] PUT /api/tax/reports/${month} - User: ${req.user._id}`);
+        const userId = req.user._id.toString();
+        console.log(`[TaxReportRoutes] PUT /api/tax/reports/${month} - User: ${userId}`);
         // Validate month format
         if (!/^\d{4}-\d{2}$/.test(month)) {
             console.error('[TaxReportRoutes] Invalid month format');
             return res.status(400).json({ error: 'Invalid month format. Expected YYYY-MM' });
         }
         const updates = req.body;
-        const report = await taxReportService.updateTaxReport(req.user._id, month, updates);
+        const report = await taxReportService.updateTaxReport(userId, month, updates);
         console.log(`[TaxReportRoutes] Tax report updated successfully for month: ${month}`);
         res.status(200).json({ report });
     }
     catch (error) {
         console.error('[TaxReportRoutes] Error updating tax report:', error);
-        res.status(500).json({ error: error.message || 'Failed to update tax report' });
+        const err = error;
+        res.status(500).json({ error: err.message || 'Failed to update tax report' });
     }
 });
 // Description: Delete a tax report (only if not frozen)
 // Endpoint: DELETE /api/tax/reports/:month
 // Request: { month: string } (URL param)
 // Response: { success: boolean, message: string }
-router.delete('/reports/:month', requireUser, async (req, res) => {
+router.delete('/reports/:month', requireUser(), async (req, res) => {
     try {
         const { month } = req.params;
-        console.log(`[TaxReportRoutes] DELETE /api/tax/reports/${month} - User: ${req.user._id}`);
+        const userId = req.user._id.toString();
+        console.log(`[TaxReportRoutes] DELETE /api/tax/reports/${month} - User: ${userId}`);
         // Validate month format
         if (!/^\d{4}-\d{2}$/.test(month)) {
             console.error('[TaxReportRoutes] Invalid month format');
             return res.status(400).json({ error: 'Invalid month format. Expected YYYY-MM' });
         }
-        await taxReportService.deleteTaxReport(req.user._id, month);
+        await taxReportService.deleteTaxReport(userId, month);
         console.log(`[TaxReportRoutes] Tax report deleted successfully for month: ${month}`);
         res.status(200).json({ success: true, message: 'Tax report deleted successfully' });
     }
     catch (error) {
         console.error('[TaxReportRoutes] Error deleting tax report:', error);
-        res.status(500).json({ error: error.message || 'Failed to delete tax report' });
+        const err = error;
+        res.status(500).json({ error: err.message || 'Failed to delete tax report' });
     }
 });
 // Description: Get tax report statistics
 // Endpoint: GET /api/tax/stats
 // Request: {}
 // Response: { stats: object }
-router.get('/stats', requireUser, async (req, res) => {
+router.get('/stats', requireUser(), async (req, res) => {
     try {
-        console.log(`[TaxReportRoutes] GET /api/tax/stats - User: ${req.user._id}`);
-        const stats = await taxReportService.getTaxReportStats(req.user._id);
+        const userId = req.user._id.toString();
+        console.log(`[TaxReportRoutes] GET /api/tax/stats - User: ${userId}`);
+        const stats = await taxReportService.getTaxReportStats(userId);
         console.log(`[TaxReportRoutes] Returning tax report statistics`);
         res.status(200).json({ stats });
     }
     catch (error) {
         console.error('[TaxReportRoutes] Error fetching tax report statistics:', error);
-        res.status(500).json({ error: error.message || 'Failed to fetch tax report statistics' });
+        const err = error;
+        res.status(500).json({ error: err.message || 'Failed to fetch tax report statistics' });
     }
 });
 export default router;
