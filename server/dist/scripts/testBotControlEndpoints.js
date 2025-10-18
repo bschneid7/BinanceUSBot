@@ -11,7 +11,7 @@ import axios from 'axios';
 const BASE_URL = 'http://localhost:3000';
 const TEST_USER = {
     email: 'test@example.com',
-    password: 'TestPassword123!'
+    password: 'password123'
 };
 let api;
 let accessToken;

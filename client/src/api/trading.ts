@@ -159,35 +159,17 @@ export const resumeTrading = async (justification?: string): Promise<{ success: 
 
 // Description: Get tax reports
 // Endpoint: GET /api/tax/reports
-// Request: {}
+// Request: { year?: number, status?: string } (query params)
 // Response: { reports: TaxReport[] }
-export const getTaxReports = async (): Promise<{ reports: TaxReport[] }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        reports: [
-          {
-            _id: '1',
-            month: '2025-01',
-            created_at: new Date(Date.now() - 86400000).toISOString(),
-            equity: 7142.50,
-            realized_pnl: 142.50,
-            fees_paid: 18.20,
-            balances: { BTC: 0.084, USDT: 1250.00 },
-            content_hash: 'a1b2c3d4e5f6...',
-            frozen: true,
-            pdf_url: '/tax_documents/2025-01-Reconciliation.pdf'
-          }
-        ]
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/tax/reports');
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+export const getTaxReports = async (filters?: { year?: number; status?: string }): Promise<{ reports: TaxReport[] }> => {
+  try {
+    const response = await api.get('/api/tax/reports', { params: filters });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch tax reports');
+  }
 };
 
 // Description: Get equity curve data for chart
