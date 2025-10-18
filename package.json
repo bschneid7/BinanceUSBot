@@ -18,7 +18,15 @@
     "debug": "concurrently -n \"client,server\" \"npm run client\" \"cross-env NODE_OPTIONS=--inspect-brk=9229 npm run server\"",
     "seed": "cd server && npm run seed",
     "seed:positions": "cd server && npm run seed:positions",
-    "seed:user": "cd server && npm run seed:user"
+    "seed:user": "cd server && npm run seed:user",
+    "seed:admin": "cd server && tsx scripts/db-seed-admin.ts",
+    "db:cleanup": "cd server && tsx scripts/db-cleanup.ts",
+    "db:reset": "cd server && tsx scripts/db-reset.ts",
+    "api:test": "tsx scripts/api-test.ts",
+    "build": "npm run shared-build && cd server && npm run build && cd ../client && npm run build",
+    "build:docker": "docker compose build",
+    "deploy": "bash deploy.sh",
+    "deploy:docker": "bash scripts/docker-deploy.sh"
   },
   "author": "",
   "license": "ISC",
@@ -27,6 +35,7 @@
     "concurrently": "^9.1.0"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "tsx": "^4.20.6"
   }
 }
