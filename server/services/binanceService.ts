@@ -52,6 +52,35 @@ interface BinanceAccountInfo {
   }>;
 }
 
+interface BinanceExchangeInfo {
+  symbols: Array<{
+    symbol: string;
+    status: string;
+    baseAsset: string;
+    quoteAsset: string;
+    filters: Array<{
+      filterType: string;
+      minPrice?: string;
+      maxPrice?: string;
+      tickSize?: string;
+      minQty?: string;
+      maxQty?: string;
+      stepSize?: string;
+      minNotional?: string;
+    }>;
+  }>;
+}
+
+interface SymbolPrecision {
+  symbol: string;
+  pricePrecision: number;
+  quantityPrecision: number;
+  minNotional: number;
+  minQty: number;
+  maxQty: number;
+  stepSize: number;
+}
+
 class BinanceService {
   private apiKey: string;
   private apiSecret: string;
@@ -376,6 +405,148 @@ class BinanceService {
     });
 
     return totalVolume > 0 ? totalPriceVolume / totalVolume : 0;
+  }
+
+  /**
+   * Get exchange information including symbol precision and filters
+   */
+  async getExchangeInfo(): Promise<BinanceExchangeInfo> {
+    try {
+      const response = await this.client.get('/api/v3/exchangeInfo');
+      return response.data as BinanceExchangeInfo;
+    } catch (error) {
+      console.error('[BinanceService] Error fetching exchange info:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get symbol precision and trading rules
+   */
+  async getSymbolPrecision(symbol: string): Promise<SymbolPrecision | null> {
+    try {
+      const exchangeInfo = await this.getExchangeInfo();
+      const symbolInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
+
+      if (!symbolInfo) {
+        console.warn(`[BinanceService] Symbol ${symbol} not found in exchange info`);
+        return null;
+      }
+
+      // Extract filters
+      const priceFilter = symbolInfo.filters.find(f => f.filterType === 'PRICE_FILTER');
+      const lotSizeFilter = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
+      const minNotionalFilter = symbolInfo.filters.find(
+        f => f.filterType === 'MIN_NOTIONAL' || f.filterType === 'NOTIONAL'
+      );
+
+      // Calculate precision from tick size and step size
+      const tickSize = priceFilter?.tickSize || '0.01';
+      const stepSize = lotSizeFilter?.stepSize || '0.00001';
+
+      const pricePrecision = Math.abs(Math.log10(parseFloat(tickSize)));
+      const quantityPrecision = Math.abs(Math.log10(parseFloat(stepSize)));
+
+      return {
+        symbol,
+        pricePrecision: Math.floor(pricePrecision),
+        quantityPrecision: Math.floor(quantityPrecision),
+        minNotional: parseFloat(minNotionalFilter?.minNotional || '10'),
+        minQty: parseFloat(lotSizeFilter?.minQty || '0.00001'),
+        maxQty: parseFloat(lotSizeFilter?.maxQty || '9000'),
+        stepSize: parseFloat(stepSize),
+      };
+    } catch (error) {
+      console.error(`[BinanceService] Error getting precision for ${symbol}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Adjust quantity to meet symbol precision requirements
+   */
+  adjustQuantity(quantity: number, precision: SymbolPrecision): number {
+    const { stepSize, minQty, maxQty } = precision;
+
+    // Round to step size
+    const adjusted = Math.floor(quantity / stepSize) * stepSize;
+
+    // Ensure within bounds
+    const bounded = Math.max(minQty, Math.min(maxQty, adjusted));
+
+    // Round to precision
+    return parseFloat(bounded.toFixed(precision.quantityPrecision));
+  }
+
+  /**
+   * Adjust price to meet symbol precision requirements
+   */
+  adjustPrice(price: number, precision: SymbolPrecision): number {
+    return parseFloat(price.toFixed(precision.pricePrecision));
+  }
+
+  /**
+   * Validate order parameters against symbol rules
+   */
+  validateOrder(params: {
+    symbol: string;
+    quantity: number;
+    price: number;
+    precision: SymbolPrecision;
+  }): { valid: boolean; reason?: string } {
+    const { quantity, price, precision } = params;
+
+    // Check minimum quantity
+    if (quantity < precision.minQty) {
+      return {
+        valid: false,
+        reason: `Quantity ${quantity} below minimum ${precision.minQty}`,
+      };
+    }
+
+    // Check maximum quantity
+    if (quantity > precision.maxQty) {
+      return {
+        valid: false,
+        reason: `Quantity ${quantity} above maximum ${precision.maxQty}`,
+      };
+    }
+
+    // Check notional value (quantity × price)
+    const notional = quantity * price;
+    if (notional < precision.minNotional) {
+      return {
+        valid: false,
+        reason: `Notional ${notional.toFixed(2)} below minimum ${precision.minNotional}`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Get my trades for a symbol
+   */
+  async getMyTrades(symbol: string, limit: number = 500): Promise<unknown[]> {
+    return (await this.signedRequest('GET', '/api/v3/myTrades', {
+      symbol,
+      limit,
+    })) as unknown[];
+  }
+
+  /**
+   * Get current average price for a symbol
+   */
+  async getAveragePrice(symbol: string): Promise<{ price: string }> {
+    try {
+      const response = await this.client.get('/api/v3/avgPrice', {
+        params: { symbol },
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`[BinanceService] Error fetching average price for ${symbol}:`, error);
+      throw error;
+    }
   }
 }
 

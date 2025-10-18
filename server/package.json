@@ -14,7 +14,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed": "tsx scripts/seedDatabase.ts",
     "seed:positions": "tsx scripts/seedPositions.ts",
-    "seed:user": "tsx scripts/createTestUser.ts"
+    "seed:user": "tsx scripts/createTestUser.ts",
+    "test:quick": "tsx scripts/quickTest.ts",
+    "test:binance": "tsx scripts/testBinanceIntegration.ts",
+    "test:market-data": "tsx scripts/testMarketDataFlow.ts"
   },
   "keywords": [],
   "author": "",
