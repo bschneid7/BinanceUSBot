@@ -158,6 +158,6 @@ export interface TaxReport {
   content_hash: string;
   frozen: boolean;
   pdf_url?: string;
-  reconciliationStatus?: 'pending' | 'balanced' | 'discrepancy';
+  reconciliation_status?: 'pending' | 'balanced' | 'discrepancy';
   notes?: string;
 }

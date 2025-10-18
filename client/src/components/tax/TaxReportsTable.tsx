@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TaxReport } from '@/types/trading';
 import { Download, Lock } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 interface TaxReportsTableProps {
   reports: TaxReport[];
@@ -11,6 +11,23 @@ interface TaxReportsTableProps {
 
 export function TaxReportsTable({ reports }: TaxReportsTableProps) {
   const formatCurrency = (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const formatDate = (dateString: string | undefined): string => {
+    if (!dateString) {
+      return 'N/A';
+    }
+
+    try {
+      const date = parseISO(dateString);
+      if (isValid(date)) {
+        return format(date, 'MMM dd, yyyy');
+      }
+      return 'Invalid Date';
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
+  };
 
   const handleDownload = (report: TaxReport) => {
     console.log('Downloading report:', report._id);
@@ -42,7 +59,7 @@ export function TaxReportsTable({ reports }: TaxReportsTableProps) {
             reports.map((report) => (
               <TableRow key={report._id}>
                 <TableCell className="font-medium">{report.month}</TableCell>
-                <TableCell>{format(new Date(report.created_at), 'MMM dd, yyyy')}</TableCell>
+                <TableCell>{formatDate(report.created_at)}</TableCell>
                 <TableCell>{formatCurrency(report.equity)}</TableCell>
                 <TableCell className={report.realized_pnl >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(report.realized_pnl)}</TableCell>
                 <TableCell>{formatCurrency(report.fees_paid)}</TableCell>

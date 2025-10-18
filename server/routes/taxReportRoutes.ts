@@ -1,6 +1,7 @@
 import express, { Response } from 'express';
 import { requireUser } from './middlewares/auth';
 import * as taxReportService from '../services/taxReportService';
+import { ITaxReport } from '../models/TaxReport';
 
 interface AuthRequest extends express.Request {
   user?: {
@@ -13,6 +14,27 @@ interface AuthRequest extends express.Request {
 }
 
 const router = express.Router();
+
+/**
+ * Transform tax report from database format to API format
+ * Converts camelCase to snake_case for frontend compatibility
+ */
+const transformTaxReport = (report: ITaxReport) => {
+  return {
+    _id: report._id,
+    month: report.month,
+    created_at: report.createdAt?.toISOString() || new Date().toISOString(),
+    equity: report.equity,
+    realized_pnl: report.realizedPnl,
+    fees_paid: report.feesPaid,
+    balances: report.balances,
+    content_hash: report.contentHash,
+    frozen: report.frozen,
+    pdf_url: report.pdfUrl,
+    reconciliation_status: report.reconciliationStatus,
+    notes: report.notes
+  };
+};
 
 // Description: Get all tax reports for the authenticated user
 // Endpoint: GET /api/tax/reports
@@ -46,8 +68,11 @@ router.get('/reports', requireUser(), async (req: AuthRequest, res: Response) =>
 
     const reports = await taxReportService.getTaxReports(userId, filters);
 
-    console.log(`[TaxReportRoutes] Returning ${reports.length} tax reports`);
-    res.status(200).json({ reports });
+    // Transform reports to API format
+    const transformedReports = reports.map(transformTaxReport);
+
+    console.log(`[TaxReportRoutes] Returning ${transformedReports.length} tax reports`);
+    res.status(200).json({ reports: transformedReports });
   } catch (error) {
     console.error('[TaxReportRoutes] Error fetching tax reports:', error);
     const err = error as Error;
@@ -78,8 +103,11 @@ router.get('/reports/:month', requireUser(), async (req: AuthRequest, res: Respo
       return res.status(404).json({ error: 'Tax report not found' });
     }
 
+    // Transform report to API format
+    const transformedReport = transformTaxReport(report);
+
     console.log(`[TaxReportRoutes] Returning tax report for month: ${month}`);
-    res.status(200).json({ report });
+    res.status(200).json({ report: transformedReport });
   } catch (error) {
     console.error('[TaxReportRoutes] Error fetching tax report:', error);
     const err = error as Error;
@@ -136,8 +164,11 @@ router.post('/reports', requireUser(), async (req: AuthRequest, res: Response) =
       notes
     });
 
+    // Transform report to API format
+    const transformedReport = transformTaxReport(report);
+
     console.log(`[TaxReportRoutes] Tax report created successfully for month: ${month}`);
-    res.status(201).json({ report });
+    res.status(201).json({ report: transformedReport });
   } catch (error) {
     console.error('[TaxReportRoutes] Error creating tax report:', error);
     const err = error as Error;
@@ -165,8 +196,16 @@ router.put('/reports/:month', requireUser(), async (req: AuthRequest, res: Respo
 
     const report = await taxReportService.updateTaxReport(userId, month, updates);
 
+    if (!report) {
+      console.log(`[TaxReportRoutes] Tax report not found for month: ${month}`);
+      return res.status(404).json({ error: 'Tax report not found' });
+    }
+
+    // Transform report to API format
+    const transformedReport = transformTaxReport(report);
+
     console.log(`[TaxReportRoutes] Tax report updated successfully for month: ${month}`);
-    res.status(200).json({ report });
+    res.status(200).json({ report: transformedReport });
   } catch (error) {
     console.error('[TaxReportRoutes] Error updating tax report:', error);
     const err = error as Error;
