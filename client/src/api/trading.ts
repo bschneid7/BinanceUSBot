@@ -45,9 +45,10 @@ export const getActivePositions = async (): Promise<{ positions: Position[] }> =
   try {
     const response = await api.get('/api/positions/active');
     return response.data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch active positions');
   }
 };
 
