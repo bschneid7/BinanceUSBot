@@ -18,16 +18,20 @@ export function TradeHistory() {
   const { toast } = useToast();
 
   const loadTrades = useCallback(async () => {
+    console.log('[TradeHistory] Loading trades...', { playbookFilter, outcomeFilter });
     try {
       const filters: Record<string, string> = {};
       if (playbookFilter !== 'all') filters.playbook = playbookFilter;
       if (outcomeFilter !== 'all') filters.outcome = outcomeFilter;
 
+      console.log('[TradeHistory] Calling getTradeHistory with filters:', filters);
       const response = await getTradeHistory(filters);
+      console.log('[TradeHistory] Received response:', response);
       setTrades(response.trades);
       setLoading(false);
+      console.log('[TradeHistory] Trades loaded successfully. Count:', response.trades?.length);
     } catch (error: unknown) {
-      console.error('Error loading trades:', error);
+      console.error('[TradeHistory] Error loading trades:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to load trade history';
       toast({
         title: 'Error',
