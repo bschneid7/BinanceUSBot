@@ -2,6 +2,13 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IBotConfig extends Document {
   userId: mongoose.Types.ObjectId;
+  botStatus: 'ACTIVE' | 'HALTED_DAILY' | 'HALTED_WEEKLY' | 'STOPPED';
+  haltMetadata?: {
+    reason?: string;
+    timestamp?: Date;
+    justification?: string;
+    positionsFlattened?: number;
+  };
   scanner: {
     pairs: string[];
     refresh_ms: number;
@@ -68,6 +75,27 @@ const schema = new Schema<IBotConfig>({
     required: true,
     unique: true,
     index: true,
+  },
+  botStatus: {
+    type: String,
+    enum: ['ACTIVE', 'HALTED_DAILY', 'HALTED_WEEKLY', 'STOPPED'],
+    default: 'ACTIVE',
+    required: true,
+    index: true,
+  },
+  haltMetadata: {
+    reason: {
+      type: String,
+    },
+    timestamp: {
+      type: Date,
+    },
+    justification: {
+      type: String,
+    },
+    positionsFlattened: {
+      type: Number,
+    },
   },
   scanner: {
     pairs: {

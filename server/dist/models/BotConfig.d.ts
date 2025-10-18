@@ -1,6 +1,13 @@
 import mongoose, { Document } from 'mongoose';
 export interface IBotConfig extends Document {
     userId: mongoose.Types.ObjectId;
+    botStatus: 'ACTIVE' | 'HALTED_DAILY' | 'HALTED_WEEKLY' | 'STOPPED';
+    haltMetadata?: {
+        reason?: string;
+        timestamp?: Date;
+        justification?: string;
+        positionsFlattened?: number;
+    };
     scanner: {
         pairs: string[];
         refresh_ms: number;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireUser } from './middlewares/auth';
 import botStatusService from '../services/botStatusService';
+import botControlService from '../services/botControlService';
 const router = Router();
 // Description: Get bot status and real-time trading metrics
 // Endpoint: GET /api/bot/status
@@ -79,6 +80,47 @@ router.get('/health', requireUser(), async (req, res) => {
         const errorMessage = error instanceof Error ? error.message : 'Failed to fetch system health';
         res.status(500).json({
             error: errorMessage
+        });
+    }
+});
+// Description: Emergency stop - Flatten all positions and halt trading
+// Endpoint: POST /api/bot/emergency-stop
+// Request: {}
+// Response: { success: boolean, message: string, positionsFlattened: number }
+router.post('/emergency-stop', requireUser(), async (req, res) => {
+    try {
+        console.log(`[BotRoutes] POST /api/bot/emergency-stop - User: ${req.user._id}`);
+        const result = await botControlService.emergencyStop(req.user._id);
+        console.log(`[BotRoutes] Emergency stop executed for user: ${req.user._id} - Positions flattened: ${result.positionsFlattened}`);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        console.error('[BotRoutes] Error executing emergency stop:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to execute emergency stop';
+        res.status(500).json({
+            error: errorMessage,
+            message: errorMessage
+        });
+    }
+});
+// Description: Resume trading after halt
+// Endpoint: POST /api/bot/resume
+// Request: { justification?: string }
+// Response: { success: boolean, message: string, previousStatus: string, justification?: string }
+router.post('/resume', requireUser(), async (req, res) => {
+    try {
+        console.log(`[BotRoutes] POST /api/bot/resume - User: ${req.user._id}`);
+        const { justification } = req.body;
+        const result = await botControlService.resumeTrading(req.user._id, justification);
+        console.log(`[BotRoutes] Trading resumed for user: ${req.user._id} - Previous status: ${result.previousStatus}`);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        console.error('[BotRoutes] Error resuming trading:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to resume trading';
+        res.status(500).json({
+            error: errorMessage,
+            message: errorMessage
         });
     }
 });

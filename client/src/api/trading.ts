@@ -132,17 +132,14 @@ export const updateBotConfig = async (config: Partial<BotConfig>): Promise<{ suc
 // Request: {}
 // Response: { success: boolean, message: string }
 export const emergencyStop = async (): Promise<{ success: boolean; message: string }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ success: true, message: 'Emergency stop executed. All positions flattened.' });
-    }, 500);
-  });
-  // try {
-  //   return await api.post('/api/bot/emergency-stop');
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.post('/api/bot/emergency-stop');
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to execute emergency stop');
+  }
 };
 
 // Description: Resume trading after halt
@@ -150,17 +147,14 @@ export const emergencyStop = async (): Promise<{ success: boolean; message: stri
 // Request: { justification?: string }
 // Response: { success: boolean, message: string }
 export const resumeTrading = async (justification?: string): Promise<{ success: boolean; message: string }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ success: true, message: 'Trading resumed successfully' });
-    }, 500);
-  });
-  // try {
-  //   return await api.post('/api/bot/resume', { justification });
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.post('/api/bot/resume', { justification });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to resume trading');
+  }
 };
 
 // Description: Get tax reports

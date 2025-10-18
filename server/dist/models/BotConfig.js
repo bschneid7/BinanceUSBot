@@ -7,6 +7,27 @@ const schema = new Schema({
         unique: true,
         index: true,
     },
+    botStatus: {
+        type: String,
+        enum: ['ACTIVE', 'HALTED_DAILY', 'HALTED_WEEKLY', 'STOPPED'],
+        default: 'ACTIVE',
+        required: true,
+        index: true,
+    },
+    haltMetadata: {
+        reason: {
+            type: String,
+        },
+        timestamp: {
+            type: Date,
+        },
+        justification: {
+            type: String,
+        },
+        positionsFlattened: {
+            type: Number,
+        },
+    },
     scanner: {
         pairs: {
             type: [String],

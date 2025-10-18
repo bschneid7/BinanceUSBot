@@ -7,6 +7,8 @@ import tradeRoutes from './routes/tradeRoutes';
 import botRoutes from './routes/botRoutes';
 import signalRoutes from './routes/signalRoutes';
 import alertRoutes from './routes/alertRoutes';
+import configRoutes from './routes/configRoutes';
+import analyticsRoutes from './routes/analyticsRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 // Load environment variables
@@ -44,6 +46,10 @@ app.use('/api/bot', botRoutes);
 app.use('/api/signals', signalRoutes);
 // Alert Routes
 app.use('/api/alerts', alertRoutes);
+// Config Routes
+app.use('/api/config', configRoutes);
+// Analytics Routes
+app.use('/api/analytics', analyticsRoutes);
 // If no routes handled the request, it's a 404
 app.use((req, res) => {
     res.status(404).send("Page not found.");

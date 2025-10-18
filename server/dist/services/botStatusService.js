@@ -71,17 +71,23 @@ class BotStatusService {
             // Calculate reserve level (percentage of equity in USDT)
             // Simplified - assumes available capital is reserve
             const reserveLevel = equity > 0 ? (availableCapital / equity) * 100 : 0;
-            // Determine bot status based on loss limits
-            const dailyStopR = config?.risk?.daily_stop_R || -2.0;
-            const weeklyStopR = config?.risk?.weekly_stop_R || -6.0;
-            let status = 'ACTIVE';
-            if (weeklyPnlR <= weeklyStopR) {
-                status = 'HALTED_WEEKLY';
-                console.log(`[BotStatusService] Weekly loss limit reached: ${weeklyPnlR.toFixed(2)}R <= ${weeklyStopR}R`);
+            // Get bot status from config (manual overrides take precedence)
+            let status = config?.botStatus || 'ACTIVE';
+            // If status is ACTIVE, check if automatic loss limits should halt
+            if (status === 'ACTIVE') {
+                const dailyStopR = config?.risk?.daily_stop_R || -2.0;
+                const weeklyStopR = config?.risk?.weekly_stop_R || -6.0;
+                if (weeklyPnlR <= weeklyStopR) {
+                    status = 'HALTED_WEEKLY';
+                    console.log(`[BotStatusService] Weekly loss limit reached: ${weeklyPnlR.toFixed(2)}R <= ${weeklyStopR}R`);
+                }
+                else if (dailyPnlR <= dailyStopR) {
+                    status = 'HALTED_DAILY';
+                    console.log(`[BotStatusService] Daily loss limit reached: ${dailyPnlR.toFixed(2)}R <= ${dailyStopR}R`);
+                }
             }
-            else if (dailyPnlR <= dailyStopR) {
-                status = 'HALTED_DAILY';
-                console.log(`[BotStatusService] Daily loss limit reached: ${dailyPnlR.toFixed(2)}R <= ${dailyStopR}R`);
+            else {
+                console.log(`[BotStatusService] Bot manually set to status: ${status}`);
             }
             const botStatus = {
                 status,
