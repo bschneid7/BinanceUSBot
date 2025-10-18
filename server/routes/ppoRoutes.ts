@@ -1,11 +1,28 @@
 import express from 'express';
 import { requireUser } from './middlewares/auth';
 import PPOAgent from '../services/tradingEngine/PPOAgent';
+import mlModelService from '../services/mlModelService';
+import { Types } from 'mongoose';
 
 const router = express.Router();
 
 // Store PPO agents per user (in-memory for MVP; could be persisted)
 const ppoAgents = new Map<string, PPOAgent>();
+
+// Store training jobs per user
+interface TrainingJob {
+  status: 'TRAINING' | 'COMPLETED' | 'FAILED';
+  progress: number;
+  avgReward?: number;
+  episodeRewards?: number[];
+  stats?: Record<string, unknown>;
+  duration?: number;
+  error?: string;
+  modelId?: string;
+  startTime: number;
+}
+
+const trainingJobs = new Map<string, TrainingJob>();
 
 /**
  * Get or create PPO agent for user
@@ -19,10 +36,10 @@ function getPPOAgent(userId: string): PPOAgent {
   return ppoAgents.get(userId)!;
 }
 
-// Description: Train PPO agent
+// Description: Train PPO agent (async background job)
 // Endpoint: POST /api/ppo/train
 // Request: { episodes: number, historicalData?: Array<{price: number, volume: number, volatility: number}> }
-// Response: { success: boolean, avgReward: number, episodeRewards: number[], stats: object }
+// Response: { success: boolean, message: string, jobStatus: string }
 router.post('/train', requireUser(), async (req, res) => {
   try {
     const userId = req.user._id.toString();
@@ -37,30 +54,160 @@ router.post('/train', requireUser(), async (req, res) => {
       });
     }
 
-    // Get or create agent
-    const agent = getPPOAgent(userId);
+    // Check if training already in progress
+    const existingJob = trainingJobs.get(userId);
+    if (existingJob && existingJob.status === 'TRAINING') {
+      return res.status(409).json({
+        error: 'Training already in progress',
+        jobStatus: 'TRAINING',
+        progress: existingJob.progress,
+      });
+    }
 
-    // Train agent
-    const startTime = Date.now();
-    const result = await agent.train(episodes, historicalData);
-    const duration = Date.now() - startTime;
+    // Initialize training job
+    trainingJobs.set(userId, {
+      status: 'TRAINING',
+      progress: 0,
+      startTime: Date.now(),
+    });
 
-    const stats = agent.getStats();
+    // Create ML model record
+    const version = `v${Date.now()}-e${episodes}`;
+    const modelRecord = await mlModelService.createModel(new Types.ObjectId(req.user._id), {
+      modelType: 'PPO',
+      version,
+      episodes,
+      avgReward: 0,
+      episodeRewards: [],
+      config: {
+        stateDim: 5,
+        actionDim: 3,
+        learningRate: 0.0003,
+        gamma: 0.99,
+        epsilon: 0.2,
+      },
+      notes: 'Training started via API',
+    });
 
-    console.log(`[PPORoutes] Training completed in ${duration}ms, avg reward: ${result.avgReward.toFixed(2)}`);
+    // Update job with model ID
+    const job = trainingJobs.get(userId)!;
+    job.modelId = modelRecord._id.toString();
+    trainingJobs.set(userId, job);
 
-    res.status(200).json({
+    console.log(`[PPORoutes] Created model record ${modelRecord._id}, starting background training`);
+
+    // Start training in background (non-blocking)
+    setImmediate(async () => {
+      try {
+        console.log(`[PPORoutes] Background training started for user ${userId}`);
+
+        const agent = getPPOAgent(userId);
+        const startTime = Date.now();
+
+        // Train agent
+        const result = await agent.train(episodes, historicalData);
+        const duration = Date.now() - startTime;
+
+        const stats = agent.getStats();
+
+        console.log(`[PPORoutes] Training completed in ${duration}ms, avg reward: ${result.avgReward.toFixed(2)}`);
+
+        // Update ML model record
+        await mlModelService.completeTraining(modelRecord._id, {
+          avgReward: result.avgReward,
+          episodeRewards: result.episodeRewards,
+          trainingDuration: duration,
+          actorParams: stats.actorParams,
+          criticParams: stats.criticParams,
+        });
+
+        // Update job status
+        trainingJobs.set(userId, {
+          status: 'COMPLETED',
+          progress: 100,
+          avgReward: result.avgReward,
+          episodeRewards: result.episodeRewards,
+          stats,
+          duration,
+          modelId: modelRecord._id.toString(),
+          startTime,
+        });
+
+        console.log(`[PPORoutes] Training job completed for user ${userId}`);
+      } catch (error: unknown) {
+        const err = error as Error;
+        console.error('[PPORoutes] Background training failed:', err);
+
+        // Mark model as failed
+        try {
+          await mlModelService.failTraining(modelRecord._id, err.message);
+        } catch (dbError) {
+          console.error('[PPORoutes] Failed to update model status:', dbError);
+        }
+
+        // Update job status
+        trainingJobs.set(userId, {
+          status: 'FAILED',
+          progress: 0,
+          error: err.message,
+          modelId: modelRecord._id.toString(),
+          startTime,
+        });
+      }
+    });
+
+    // Return 202 Accepted immediately
+    res.status(202).json({
       success: true,
-      avgReward: result.avgReward,
-      episodeRewards: result.episodeRewards,
-      stats,
-      duration,
+      message: 'Training started in background',
+      jobStatus: 'TRAINING',
+      modelId: modelRecord._id.toString(),
     });
   } catch (error: unknown) {
     const err = error as Error;
-    console.error('[PPORoutes] Error training PPO agent:', err);
+    console.error('[PPORoutes] Error starting training:', err);
     res.status(500).json({
-      error: err.message || 'Failed to train PPO agent',
+      error: err.message || 'Failed to start training',
+    });
+  }
+});
+
+// Description: Get training job status
+// Endpoint: GET /api/ppo/training-status
+// Request: {}
+// Response: { status: string, progress: number, avgReward?: number, stats?: object, duration?: number, error?: string, modelId?: string }
+router.get('/training-status', requireUser(), async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+
+    const job = trainingJobs.get(userId);
+
+    if (!job) {
+      return res.status(200).json({
+        status: 'NONE',
+        progress: 0,
+        message: 'No training job found',
+      });
+    }
+
+    console.log(`[PPORoutes] Training status for user ${userId}: ${job.status} (${job.progress}%)`);
+
+    res.status(200).json({
+      status: job.status,
+      progress: job.progress,
+      avgReward: job.avgReward,
+      episodeRewards: job.episodeRewards,
+      stats: job.stats,
+      duration: job.duration,
+      error: job.error,
+      modelId: job.modelId,
+      elapsedTime: Date.now() - job.startTime,
+    });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('[PPORoutes] Error getting training status:', err);
+    res.status(500).json({
+      error: err.message || 'Failed to get training status',
     });
   }
 });

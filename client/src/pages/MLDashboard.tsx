@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/useToast';
 import { getMLModels, getMLStats, deployMLModel, archiveMLModel } from '@/api/ml';
-import { trainPPO, getPPOStats } from '@/api/ppo';
+import { trainPPO, getTrainingStatus } from '@/api/ppo';
 import { Loader2, Brain, TrendingUp, Activity, CheckCircle, XCircle, Archive } from 'lucide-react';
 
 interface MLModel {
@@ -47,7 +47,9 @@ export default function MLDashboard() {
   const [stats, setStats] = useState<MLStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [training, setTraining] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState<string>('');
   const { toast } = useToast();
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -71,31 +73,86 @@ export default function MLDashboard() {
     fetchData();
   }, [fetchData]);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Poll for training status
+  const pollTrainingStatus = useCallback(async () => {
+    try {
+      const status = await getTrainingStatus();
+
+      if (status.status === 'COMPLETED') {
+        // Training complete
+        setTraining(false);
+        setTrainingProgress('');
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+
+        toast({
+          title: 'Training Complete',
+          description: `Average reward: ${status.avgReward?.toFixed(2) || 'N/A'}. Duration: ${((status.duration || 0) / 1000).toFixed(1)}s`,
+        });
+
+        await fetchData(); // Refresh data
+      } else if (status.status === 'FAILED') {
+        // Training failed
+        setTraining(false);
+        setTrainingProgress('');
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+
+        toast({
+          variant: 'destructive',
+          title: 'Training Failed',
+          description: status.error || 'Unknown error',
+        });
+
+        await fetchData(); // Refresh data
+      } else if (status.status === 'TRAINING') {
+        // Training in progress
+        const elapsed = Math.floor((status.elapsedTime || 0) / 1000);
+        setTrainingProgress(`Training in progress (${elapsed}s elapsed)...`);
+      }
+    } catch (error) {
+      console.error('Error polling training status:', error);
+      // Don't show error toast for polling failures (might be transient)
+    }
+  }, [toast, fetchData]);
+
   const handleTrain = async () => {
     try {
       setTraining(true);
-      toast({
-        title: 'Training Started',
-        description: 'Training PPO model with 500 episodes...',
-      });
+      setTrainingProgress('Starting training...');
 
       const result = await trainPPO({ episodes: 500 });
 
+      // Training started in background
       toast({
-        title: 'Training Complete',
-        description: `Average reward: ${result.avgReward.toFixed(2)}`,
+        title: 'Training Started',
+        description: 'Training PPO model in background with 500 episodes...',
       });
 
-      await fetchData(); // Refresh data
+      // Start polling for status
+      pollingIntervalRef.current = setInterval(pollTrainingStatus, 3000); // Poll every 3 seconds
     } catch (error) {
       console.error('Training error:', error);
+      setTraining(false);
+      setTrainingProgress('');
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: (error as Error).message || 'Training failed',
+        description: (error as Error).message || 'Failed to start training',
       });
-    } finally {
-      setTraining(false);
     }
   };
 
@@ -189,7 +246,7 @@ export default function MLDashboard() {
           {training ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Training...
+              {trainingProgress || 'Training...'}
             </>
           ) : (
             <>

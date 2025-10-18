@@ -1,9 +1,9 @@
 import api from './api';
 
-// Description: Train PPO agent
+// Description: Train PPO agent (starts background job)
 // Endpoint: POST /api/ppo/train
 // Request: { episodes: number, historicalData?: Array<{price: number, volume: number, volatility: number}> }
-// Response: { success: boolean, avgReward: number, episodeRewards: number[], stats: object, duration: number }
+// Response: { success: boolean, message: string, jobStatus: string, modelId: string }
 export const trainPPO = async (data: {
   episodes: number;
   historicalData?: Array<{ price: number; volume: number; volatility: number }>;
@@ -15,6 +15,21 @@ export const trainPPO = async (data: {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
     console.error('[PPO API] Training error:', err);
     throw new Error(err?.response?.data?.error || err.message || 'Training failed');
+  }
+};
+
+// Description: Get training job status
+// Endpoint: GET /api/ppo/training-status
+// Request: {}
+// Response: { status: string, progress: number, avgReward?: number, stats?: object, duration?: number, error?: string, modelId?: string, elapsedTime?: number }
+export const getTrainingStatus = async () => {
+  try {
+    const response = await api.get('/api/ppo/training-status');
+    return response.data;
+  } catch (error: unknown) {
+    const err = error as {response?: {data?: {error?: string}}, message?: string};
+    console.error('[PPO API] Training status error:', err);
+    throw new Error(err?.response?.data?.error || err.message || 'Get training status failed');
   }
 };
 
