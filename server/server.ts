@@ -6,6 +6,7 @@ import authRoutes from './routes/authRoutes';
 import positionRoutes from './routes/positionRoutes';
 import tradeRoutes from './routes/tradeRoutes';
 import botRoutes from './routes/botRoutes';
+import signalRoutes from './routes/signalRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 
@@ -47,6 +48,8 @@ app.use('/api/positions', positionRoutes);
 app.use('/api/trades', tradeRoutes);
 // Bot Routes
 app.use('/api/bot', botRoutes);
+// Signal Routes
+app.use('/api/signals', signalRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {

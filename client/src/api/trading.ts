@@ -57,44 +57,14 @@ export const getTradeHistory = async (filters?: {
 // Request: { limit?: number }
 // Response: { signals: Signal[] }
 export const getRecentSignals = async (limit: number = 10): Promise<{ signals: Signal[] }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        signals: [
-          {
-            _id: '1',
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-            symbol: 'BTCUSDT',
-            playbook: 'A',
-            action: 'EXECUTED',
-            entry_price: 111200
-          },
-          {
-            _id: '2',
-            timestamp: new Date(Date.now() - 4500000).toISOString(),
-            symbol: 'ETHUSDT',
-            playbook: 'B',
-            action: 'EXECUTED',
-            entry_price: 3420
-          },
-          {
-            _id: '3',
-            timestamp: new Date(Date.now() - 5400000).toISOString(),
-            symbol: 'SOLUSDT',
-            playbook: 'A',
-            action: 'SKIPPED',
-            reason: 'Max positions reached'
-          }
-        ]
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/signals/recent', { params: { limit } });
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.get('/api/signals/recent', { params: { limit } });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch recent signals');
+  }
 };
 
 // Description: Get system alerts
