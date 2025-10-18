@@ -63,68 +63,14 @@ export const getTradeHistory = async (filters?: {
   outcome?: string;
   symbol?: string;
 }): Promise<{ trades: Trade[] }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        trades: [
-          {
-            _id: '1',
-            date: new Date(Date.now() - 86400000).toISOString(),
-            symbol: 'BTCUSDT',
-            side: 'BUY',
-            playbook: 'A',
-            entry_price: 111200,
-            exit_price: 112400,
-            quantity: 0.032,
-            pnl_usd: 38.40,
-            pnl_r: 0.91,
-            fees: 1.42,
-            hold_time: '1h 45m',
-            outcome: 'WIN',
-            notes: 'Clean breakout, scaled at +1.5R'
-          },
-          {
-            _id: '2',
-            date: new Date(Date.now() - 172800000).toISOString(),
-            symbol: 'ETHUSDT',
-            side: 'BUY',
-            playbook: 'B',
-            entry_price: 3420,
-            exit_price: 3500,
-            quantity: 1.4,
-            pnl_usd: 112.00,
-            pnl_r: 2.67,
-            fees: 0.95,
-            hold_time: '38m',
-            outcome: 'WIN',
-            notes: 'VWAP fade, hit target'
-          },
-          {
-            _id: '3',
-            date: new Date(Date.now() - 259200000).toISOString(),
-            symbol: 'SOLUSDT',
-            side: 'BUY',
-            playbook: 'C',
-            entry_price: 145.50,
-            exit_price: 143.20,
-            quantity: 0.29,
-            pnl_usd: -42.00,
-            pnl_r: -1.0,
-            fees: 0.84,
-            hold_time: '22m',
-            outcome: 'LOSS',
-            notes: 'Event burst failed, stopped out'
-          }
-        ]
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/trades/history', { params: filters });
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.get('/api/trades/history', { params: filters });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch trade history');
+  }
 };
 
 // Description: Get recent signals
