@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Trade } from '@/types/trading';
 import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
+import { Fragment } from 'react';
 
 interface TradeHistoryTableProps {
   trades: Trade[];
@@ -73,8 +74,8 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
               const isProfitable = trade.pnl_usd >= 0;
 
               return (
-                <>
-                  <TableRow key={trade._id} className="cursor-pointer hover:bg-accent/50" onClick={() => setExpandedRow(isExpanded ? null : trade._id)}>
+                <Fragment key={trade._id}>
+                  <TableRow className="cursor-pointer hover:bg-accent/50" onClick={() => setExpandedRow(isExpanded ? null : trade._id)}>
                     <TableCell>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                         {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -107,7 +108,7 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               );
             })
           )}
