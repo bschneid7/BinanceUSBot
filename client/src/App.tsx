@@ -14,6 +14,7 @@ import { Configuration } from './pages/Configuration';
 import { TaxReports } from './pages/TaxReports';
 import { Controls } from './pages/Controls';
 import { BlankPage } from './pages/BlankPage';
+import MLDashboard from './pages/MLDashboard';
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
               <Route path="config" element={<Configuration />} />
               <Route path="tax" element={<TaxReports />} />
               <Route path="controls" element={<Controls />} />
+              <Route path="ml" element={<MLDashboard />} />
             </Route>
             <Route path="*" element={<BlankPage />} />
           </Routes>

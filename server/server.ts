@@ -13,6 +13,7 @@ import analyticsRoutes from './routes/analyticsRoutes';
 import taxReportRoutes from './routes/taxReportRoutes';
 import engineRoutes from './routes/engineRoutes';
 import ppoRoutes from './routes/ppoRoutes';
+import mlRoutes from './routes/mlRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 
@@ -68,6 +69,8 @@ app.use('/api/tax', taxReportRoutes);
 app.use('/api/engine', engineRoutes);
 // PPO Routes
 app.use('/api/ppo', ppoRoutes);
+// ML Routes
+app.use('/api/ml', mlRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {

@@ -1,12 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle, Brain } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Positions', href: '/positions', icon: Activity },
   { name: 'Trade History', href: '/trades', icon: History },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'ML Dashboard', href: '/ml', icon: Brain },
   { name: 'Configuration', href: '/config', icon: Settings },
   { name: 'Tax Reports', href: '/tax', icon: FileText },
   { name: 'Controls', href: '/controls', icon: AlertTriangle }
