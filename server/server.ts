@@ -11,6 +11,7 @@ import alertRoutes from './routes/alertRoutes';
 import configRoutes from './routes/configRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
 import taxReportRoutes from './routes/taxReportRoutes';
+import engineRoutes from './routes/engineRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 
@@ -62,6 +63,8 @@ app.use('/api/config', configRoutes);
 app.use('/api/analytics', analyticsRoutes);
 // Tax Report Routes
 app.use('/api/tax', taxReportRoutes);
+// Engine Routes
+app.use('/api/engine', engineRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {

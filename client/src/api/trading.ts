@@ -186,3 +186,48 @@ export const getEquityCurve = async (days: number = 30): Promise<{ data: Array<{
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch equity curve');
   }
 };
+
+// Description: Start the trading engine
+// Endpoint: POST /api/engine/start
+// Request: {}
+// Response: { success: boolean, message: string, status: object }
+export const startEngine = async (): Promise<{ success: boolean; message: string; status: object }> => {
+  try {
+    const response = await api.post('/api/engine/start');
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to start engine');
+  }
+};
+
+// Description: Stop the trading engine
+// Endpoint: POST /api/engine/stop
+// Request: {}
+// Response: { success: boolean, message: string, status: object }
+export const stopEngine = async (): Promise<{ success: boolean; message: string; status: object }> => {
+  try {
+    const response = await api.post('/api/engine/stop');
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to stop engine');
+  }
+};
+
+// Description: Get trading engine status
+// Endpoint: GET /api/engine/status
+// Request: {}
+// Response: { isRunning: boolean, lastScanTimestamp?: Date, lastSignalTimestamp?: Date }
+export const getEngineStatus = async (): Promise<{ isRunning: boolean; lastScanTimestamp?: Date; lastSignalTimestamp?: Date }> => {
+  try {
+    const response = await api.get('/api/engine/status');
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to get engine status');
+  }
+};
