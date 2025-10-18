@@ -56,21 +56,17 @@ export interface Alert {
 }
 
 export interface BotStatus {
-  status: 'ACTIVE' | 'HALTED' | 'HALTED_WEEKLY';
+  status: 'ACTIVE' | 'HALTED_DAILY' | 'HALTED_WEEKLY' | 'STOPPED';
   equity: number;
-  available_capital: number;
-  daily_pnl: number;
-  daily_pnl_r: number;
-  weekly_pnl: number;
-  weekly_pnl_r: number;
-  reserve_pct: number;
-  reserve_target_pct: number;
-  open_positions: number;
-  total_open_risk_r: number;
-  total_exposure_pct: number;
-  uptime_seconds: number;
-  last_signal_timestamp?: string;
-  api_latency_ms: number;
+  availableCapital: number;
+  dailyPnl: number;
+  dailyPnlR: number;
+  weeklyPnl: number;
+  weeklyPnlR: number;
+  reserveLevel: number;
+  openPositions: number;
+  totalOpenRiskR: number;
+  totalExposurePct: number;
 }
 
 export interface PerformanceMetrics {

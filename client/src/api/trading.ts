@@ -4,37 +4,16 @@ import { BotStatus, Position, Trade, Signal, Alert, PerformanceMetrics, BotConfi
 // Description: Get bot status and overview
 // Endpoint: GET /api/bot/status
 // Request: {}
-// Response: { status: BotStatus }
-export const getBotStatus = async (): Promise<{ status: BotStatus }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        status: {
-          status: 'ACTIVE',
-          equity: 7142.50,
-          available_capital: 4285.50,
-          daily_pnl: 28.50,
-          daily_pnl_r: 0.68,
-          weekly_pnl: -126.00,
-          weekly_pnl_r: -3.0,
-          reserve_pct: 28.5,
-          reserve_target_pct: 30,
-          open_positions: 2,
-          total_open_risk_r: 1.8,
-          total_exposure_pct: 45.2,
-          uptime_seconds: 86400,
-          last_signal_timestamp: new Date(Date.now() - 3600000).toISOString(),
-          api_latency_ms: 120
-        }
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/bot/status');
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+// Response: BotStatus
+export const getBotStatus = async (): Promise<BotStatus> => {
+  try {
+    const response = await api.get('/api/bot/status');
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch bot status');
+  }
 };
 
 // Description: Get active positions

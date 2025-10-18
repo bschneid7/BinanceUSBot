@@ -28,7 +28,7 @@ export function Dashboard() {
         getAlerts(20)
       ]);
 
-      setBotStatus(statusRes.status);
+      setBotStatus(statusRes);
       setPositions(positionsRes.positions);
       setSignals(signalsRes.signals);
       setAlerts(alertsRes.alerts);
@@ -84,30 +84,30 @@ export function Dashboard() {
         <StatusCard
           title="Account Equity"
           value={formatCurrency(botStatus.equity)}
-          subtitle={`Available: ${formatCurrency(botStatus.available_capital)}`}
+          subtitle={`Available: ${formatCurrency(botStatus.availableCapital)}`}
           icon={DollarSign}
           trend="neutral"
         />
         <StatusCard
           title="Daily P&L"
-          value={formatCurrency(botStatus.daily_pnl)}
-          subtitle={formatR(botStatus.daily_pnl_r)}
-          icon={botStatus.daily_pnl >= 0 ? TrendingUp : TrendingDown}
-          trend={botStatus.daily_pnl >= 0 ? 'up' : 'down'}
+          value={formatCurrency(botStatus.dailyPnl)}
+          subtitle={formatR(botStatus.dailyPnlR)}
+          icon={botStatus.dailyPnl >= 0 ? TrendingUp : TrendingDown}
+          trend={botStatus.dailyPnl >= 0 ? 'up' : 'down'}
         />
         <StatusCard
           title="Weekly P&L"
-          value={formatCurrency(botStatus.weekly_pnl)}
-          subtitle={formatR(botStatus.weekly_pnl_r)}
-          icon={botStatus.weekly_pnl >= 0 ? TrendingUp : TrendingDown}
-          trend={botStatus.weekly_pnl >= 0 ? 'up' : 'down'}
+          value={formatCurrency(botStatus.weeklyPnl)}
+          subtitle={formatR(botStatus.weeklyPnlR)}
+          icon={botStatus.weeklyPnl >= 0 ? TrendingUp : TrendingDown}
+          trend={botStatus.weeklyPnl >= 0 ? 'up' : 'down'}
         />
         <StatusCard
           title="Reserve Level"
-          value={formatPercent(botStatus.reserve_pct)}
-          subtitle={`Target: ${formatPercent(botStatus.reserve_target_pct)}`}
+          value={formatPercent(botStatus.reserveLevel)}
+          subtitle={`Target: 30%`}
           icon={Wallet}
-          trend={botStatus.reserve_pct >= botStatus.reserve_target_pct ? 'up' : 'down'}
+          trend={botStatus.reserveLevel >= 30 ? 'up' : 'down'}
         />
       </div>
 
@@ -123,15 +123,15 @@ export function Dashboard() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Count:</span>
-                <span className="font-semibold">{botStatus.open_positions}</span>
+                <span className="font-semibold">{botStatus.openPositions}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Total Risk:</span>
-                <span className="font-semibold">{formatR(botStatus.total_open_risk_r)}</span>
+                <span className="font-semibold">{formatR(botStatus.totalOpenRiskR)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Exposure:</span>
-                <span className="font-semibold">{formatPercent(botStatus.total_exposure_pct)}</span>
+                <span className="font-semibold">{formatPercent(botStatus.totalExposurePct)}</span>
               </div>
             </div>
           </CardContent>
@@ -147,16 +147,16 @@ export function Dashboard() {
           <CardContent>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">API Latency:</span>
-                <span className="font-semibold">{botStatus.api_latency_ms}ms</span>
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <span className="font-semibold text-green-600">{botStatus.status}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Uptime:</span>
-                <span className="font-semibold">{Math.floor(botStatus.uptime_seconds / 3600)}h</span>
+                <span className="text-sm text-muted-foreground">Open Positions:</span>
+                <span className="font-semibold">{botStatus.openPositions}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Last Signal:</span>
-                <span className="font-semibold text-xs">{botStatus.last_signal_timestamp ? new Date(botStatus.last_signal_timestamp).toLocaleTimeString() : 'N/A'}</span>
+                <span className="text-sm text-muted-foreground">Reserve:</span>
+                <span className="font-semibold">{formatPercent(botStatus.reserveLevel)}</span>
               </div>
             </div>
           </CardContent>
@@ -173,15 +173,15 @@ export function Dashboard() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Daily Limit:</span>
-                <span className="font-semibold">{formatR(botStatus.daily_pnl_r)} / -2.0R</span>
+                <span className="font-semibold">{formatR(botStatus.dailyPnlR)} / -2.0R</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Weekly Limit:</span>
-                <span className="font-semibold">{formatR(botStatus.weekly_pnl_r)} / -6.0R</span>
+                <span className="font-semibold">{formatR(botStatus.weeklyPnlR)} / -6.0R</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Max Open Risk:</span>
-                <span className="font-semibold">{formatR(botStatus.total_open_risk_r)} / 2.0R</span>
+                <span className="font-semibold">{formatR(botStatus.totalOpenRiskR)} / 2.0R</span>
               </div>
             </div>
           </CardContent>
