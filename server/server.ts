@@ -3,6 +3,7 @@ import express from 'express';
 import { Request, Response } from 'express';
 import basicRoutes from './routes/index';
 import authRoutes from './routes/authRoutes';
+import positionRoutes from './routes/positionRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 
@@ -38,6 +39,8 @@ app.on("error", (error: Error) => {
 app.use(basicRoutes);
 // Authentication Routes
 app.use('/api/auth', authRoutes);
+// Position Routes
+app.use('/api/positions', positionRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {

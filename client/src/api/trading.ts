@@ -42,55 +42,13 @@ export const getBotStatus = async (): Promise<{ status: BotStatus }> => {
 // Request: {}
 // Response: { positions: Position[] }
 export const getActivePositions = async (): Promise<{ positions: Position[] }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        positions: [
-          {
-            _id: '1',
-            symbol: 'BTCUSDT',
-            side: 'LONG',
-            entry_price: 111200,
-            quantity: 0.032,
-            stop_price: 111200,
-            target_price: 113800,
-            trailing_stop_distance: 1300,
-            playbook: 'A',
-            status: 'OPEN',
-            opened_at: new Date(Date.now() - 5000000).toISOString(),
-            current_price: 112600,
-            unrealized_pnl: 44.80,
-            unrealized_r: 1.07,
-            fees_paid: 1.42,
-            hold_time: '1h 23m'
-          },
-          {
-            _id: '2',
-            symbol: 'ETHUSDT',
-            side: 'LONG',
-            entry_price: 3420,
-            quantity: 1.4,
-            stop_price: 3390,
-            target_price: 3500,
-            playbook: 'B',
-            status: 'OPEN',
-            opened_at: new Date(Date.now() - 2520000).toISOString(),
-            current_price: 3480,
-            unrealized_pnl: 84.00,
-            unrealized_r: 2.0,
-            fees_paid: 0.68,
-            hold_time: '42m'
-          }
-        ]
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/positions/active');
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.get('/api/positions/active');
+    return response.data;
+  } catch (error: any) {
+    console.error(error);
+    throw new Error(error?.response?.data?.error || error.message);
+  }
 };
 
 // Description: Get trade history with filters
