@@ -9,6 +9,7 @@ import botRoutes from './routes/botRoutes';
 import signalRoutes from './routes/signalRoutes';
 import alertRoutes from './routes/alertRoutes';
 import configRoutes from './routes/configRoutes';
+import analyticsRoutes from './routes/analyticsRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 
@@ -56,6 +57,8 @@ app.use('/api/signals', signalRoutes);
 app.use('/api/alerts', alertRoutes);
 // Config Routes
 app.use('/api/config', configRoutes);
+// Analytics Routes
+app.use('/api/analytics', analyticsRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {

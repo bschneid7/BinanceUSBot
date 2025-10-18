@@ -87,37 +87,14 @@ export const getAlerts = async (limit: number = 20): Promise<{ alerts: Alert[] }
 // Request: {}
 // Response: { metrics: PerformanceMetrics }
 export const getPerformanceMetrics = async (): Promise<{ metrics: PerformanceMetrics }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        metrics: {
-          total_trades: 60,
-          win_rate: 58,
-          profit_factor: 1.42,
-          average_r: 0.8,
-          max_drawdown_r: -3.2,
-          sharpe_ratio: 1.2,
-          best_trade_r: 4.2,
-          worst_trade_r: -1.0,
-          today_trades: 5,
-          today_wins: 3,
-          today_losses: 2,
-          week_trades: 18,
-          week_wins: 10,
-          week_losses: 8,
-          month_trades: 60,
-          month_wins: 35,
-          month_losses: 25
-        }
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/analytics/performance');
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.get('/api/analytics/performance');
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch performance metrics');
+  }
 };
 
 // Description: Get bot configuration
@@ -224,25 +201,12 @@ export const getTaxReports = async (): Promise<{ reports: TaxReport[] }> => {
 // Request: { days?: number }
 // Response: { data: Array<{ date: string, equity: number }> }
 export const getEquityCurve = async (days: number = 30): Promise<{ data: Array<{ date: string; equity: number }> }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const data = [];
-      const startEquity = 7000;
-      for (let i = days; i >= 0; i--) {
-        const date = new Date(Date.now() - i * 86400000);
-        const equity = startEquity + (Math.random() - 0.4) * 200 + (days - i) * 5;
-        data.push({
-          date: date.toISOString().split('T')[0],
-          equity: Math.round(equity * 100) / 100
-        });
-      }
-      resolve({ data });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/analytics/equity-curve', { params: { days } });
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.get('/api/analytics/equity-curve', { params: { days } });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch equity curve');
+  }
 };
