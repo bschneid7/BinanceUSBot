@@ -72,41 +72,14 @@ export const getRecentSignals = async (limit: number = 10): Promise<{ signals: S
 // Request: { limit?: number }
 // Response: { alerts: Alert[] }
 export const getAlerts = async (limit: number = 20): Promise<{ alerts: Alert[] }> => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        alerts: [
-          {
-            _id: '1',
-            timestamp: new Date(Date.now() - 7200000).toISOString(),
-            level: 'WARNING',
-            message: 'Daily loss approaching: -1.6R of -2.0R',
-            type: 'RISK_LIMIT'
-          },
-          {
-            _id: '2',
-            timestamp: new Date(Date.now() - 9000000).toISOString(),
-            level: 'WARNING',
-            message: 'Slippage exceeded on ETHUSDT: 12.5 bps',
-            type: 'SLIPPAGE'
-          },
-          {
-            _id: '3',
-            timestamp: new Date(Date.now() - 86400000).toISOString(),
-            level: 'INFO',
-            message: 'Month-end reconciliation complete for 2025-01',
-            type: 'TAX'
-          }
-        ]
-      });
-    }, 500);
-  });
-  // try {
-  //   return await api.get('/api/alerts', { params: { limit } });
-  // } catch (error: any) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+  try {
+    const response = await api.get('/api/alerts', { params: { limit } });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch alerts');
+  }
 };
 
 // Description: Get performance metrics
