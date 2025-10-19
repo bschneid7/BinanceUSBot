@@ -7,7 +7,7 @@ import { BotStatus, Position, Trade, Signal, Alert, PerformanceMetrics, BotConfi
 // Response: BotStatus
 export const getBotStatus = async (): Promise<BotStatus> => {
   try {
-    const response = await api.get('/api/bot/status');
+    const response = await api.get('/bot/status');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -22,7 +22,7 @@ export const getBotStatus = async (): Promise<BotStatus> => {
 // Response: { positions: Position[] }
 export const getActivePositions = async (): Promise<{ positions: Position[] }> => {
   try {
-    const response = await api.get('/api/positions/active');
+    const response = await api.get('/positions/active');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -43,7 +43,7 @@ export const getTradeHistory = async (filters?: {
   symbol?: string;
 }): Promise<{ trades: Trade[] }> => {
   try {
-    const response = await api.get('/api/trades/history', { params: filters });
+    const response = await api.get('/trades/history', { params: filters });
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -58,7 +58,7 @@ export const getTradeHistory = async (filters?: {
 // Response: { signals: Signal[] }
 export const getRecentSignals = async (limit: number = 10): Promise<{ signals: Signal[] }> => {
   try {
-    const response = await api.get('/api/signals/recent', { params: { limit } });
+    const response = await api.get('/signals/recent', { params: { limit } });
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -73,7 +73,7 @@ export const getRecentSignals = async (limit: number = 10): Promise<{ signals: S
 // Response: { alerts: Alert[] }
 export const getAlerts = async (limit: number = 20): Promise<{ alerts: Alert[] }> => {
   try {
-    const response = await api.get('/api/alerts', { params: { limit } });
+    const response = await api.get('/alerts', { params: { limit } });
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -88,7 +88,7 @@ export const getAlerts = async (limit: number = 20): Promise<{ alerts: Alert[] }
 // Response: { metrics: PerformanceMetrics }
 export const getPerformanceMetrics = async (): Promise<{ metrics: PerformanceMetrics }> => {
   try {
-    const response = await api.get('/api/analytics/performance');
+    const response = await api.get('/analytics/performance');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -103,7 +103,7 @@ export const getPerformanceMetrics = async (): Promise<{ metrics: PerformanceMet
 // Response: { config: BotConfig }
 export const getBotConfig = async (): Promise<{ config: BotConfig }> => {
   try {
-    const response = await api.get('/api/config');
+    const response = await api.get('/config');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -118,7 +118,7 @@ export const getBotConfig = async (): Promise<{ config: BotConfig }> => {
 // Response: { success: boolean, message: string, config: BotConfig }
 export const updateBotConfig = async (config: Partial<BotConfig>): Promise<{ success: boolean; message: string; config: BotConfig }> => {
   try {
-    const response = await api.put('/api/config', config);
+    const response = await api.put('/config', config);
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -133,7 +133,7 @@ export const updateBotConfig = async (config: Partial<BotConfig>): Promise<{ suc
 // Response: { success: boolean, message: string }
 export const emergencyStop = async (): Promise<{ success: boolean; message: string }> => {
   try {
-    const response = await api.post('/api/bot/emergency-stop');
+    const response = await api.post('/bot/emergency-stop');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -148,7 +148,7 @@ export const emergencyStop = async (): Promise<{ success: boolean; message: stri
 // Response: { success: boolean, message: string }
 export const resumeTrading = async (justification?: string): Promise<{ success: boolean; message: string }> => {
   try {
-    const response = await api.post('/api/bot/resume', { justification });
+    const response = await api.post('/bot/resume', { justification });
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -163,7 +163,7 @@ export const resumeTrading = async (justification?: string): Promise<{ success: 
 // Response: { reports: TaxReport[] }
 export const getTaxReports = async (filters?: { year?: number; status?: string }): Promise<{ reports: TaxReport[] }> => {
   try {
-    const response = await api.get('/api/tax/reports', { params: filters });
+    const response = await api.get('/tax/reports', { params: filters });
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -178,7 +178,7 @@ export const getTaxReports = async (filters?: { year?: number; status?: string }
 // Response: { data: Array<{ date: string, equity: number }> }
 export const getEquityCurve = async (days: number = 30): Promise<{ data: Array<{ date: string; equity: number }> }> => {
   try {
-    const response = await api.get('/api/analytics/equity-curve', { params: { days } });
+    const response = await api.get('/analytics/equity-curve', { params: { days } });
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -193,7 +193,7 @@ export const getEquityCurve = async (days: number = 30): Promise<{ data: Array<{
 // Response: { success: boolean, message: string, status: object }
 export const startEngine = async (): Promise<{ success: boolean; message: string; status: object }> => {
   try {
-    const response = await api.post('/api/engine/start');
+    const response = await api.post('/engine/start');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -208,7 +208,7 @@ export const startEngine = async (): Promise<{ success: boolean; message: string
 // Response: { success: boolean, message: string, status: object }
 export const stopEngine = async (): Promise<{ success: boolean; message: string; status: object }> => {
   try {
-    const response = await api.post('/api/engine/stop');
+    const response = await api.post('/engine/stop');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
@@ -223,7 +223,7 @@ export const stopEngine = async (): Promise<{ success: boolean; message: string;
 // Response: { isRunning: boolean, lastScanTimestamp?: Date, lastSignalTimestamp?: Date }
 export const getEngineStatus = async (): Promise<{ isRunning: boolean; lastScanTimestamp?: Date; lastSignalTimestamp?: Date }> => {
   try {
-    const response = await api.get('/api/engine/status');
+    const response = await api.get('/engine/status');
     return response.data;
   } catch (error: unknown) {
     console.error(error);
