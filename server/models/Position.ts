@@ -19,6 +19,8 @@ export interface IPosition extends Document {
   unrealized_pnl?: number;
   unrealized_r?: number;
   hold_time?: string;
+  scaled_1?: boolean;
+  scaled_2?: boolean;
   userId: mongoose.Types.ObjectId;
 }
 
@@ -93,6 +95,14 @@ const schema = new Schema<IPosition>({
   },
   hold_time: {
     type: String,
+  },
+  scaled_1: {
+    type: Boolean,
+    default: false,
+  },
+  scaled_2: {
+    type: Boolean,
+    default: false,
   },
   userId: {
     type: Schema.Types.ObjectId,

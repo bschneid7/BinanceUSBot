@@ -9,6 +9,7 @@ import executionRouter from './executionRouter';
 import positionManager from './positionManager';
 import reserveManager from './reserveManager';
 import killSwitch from './killSwitch';
+import binanceService from '../binanceService';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -124,6 +125,7 @@ export class TradingEngine {
       // Step 1: Update PnL tracking and recalculate R
       await riskEngine.updatePnLTracking(userId);
       await this.recalculateEquity(userId);
+      await reserveManager.updateReserves(userId);
 
       // Step 2: Check kill-switch
       const killSwitchResult = await riskEngine.checkKillSwitch(userId);
@@ -245,7 +247,7 @@ export class TradingEngine {
       const position = await positionManager.createPosition(
         userId,
         signal.symbol,
-        'LONG', // All current signals are LONG
+        signal.action === 'BUY' ? 'LONG' : 'SHORT',
         orderResult.fillPrice || signal.entryPrice,
         orderResult.filledQuantity || quantity,
         signal.stopPrice,
@@ -290,10 +292,24 @@ export class TradingEngine {
         totalUnrealizedPnl += position.unrealized_pnl || 0;
       });
 
-      // Update equity (base equity + cumulative PnL)
-      // In a real implementation, this would sync with exchange balances
-      const baseEquity = 7000;
-      state.equity = baseEquity + state.dailyPnl + totalUnrealizedPnl;
+      // Fetch actual account balance from Binance
+      let baseEquity = 7000; // Default fallback
+      
+      if (binanceService.isConfigured()) {
+        try {
+          const accountInfo = await binanceService.getAccountInfo();
+          const usdBalance = accountInfo.balances.find(b => b.asset === 'USD' || b.asset === 'USDT');
+          if (usdBalance) {
+            baseEquity = parseFloat(usdBalance.free) + parseFloat(usdBalance.locked);
+            console.log(`[TradingEngine] Synced base equity from Binance: $${baseEquity.toFixed(2)}`);
+          }
+        } catch (error) {
+          console.warn('[TradingEngine] Could not fetch account balance, using default');
+        }
+      }
+
+      // Update equity
+      state.equity = baseEquity + totalUnrealizedPnl;
       state.currentR = state.equity * config.risk.R_pct;
 
       await state.save();

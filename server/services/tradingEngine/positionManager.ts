@@ -164,9 +164,15 @@ export class PositionManager {
 
       // Rule 3: Update trailing stop
       if (position.trailing_stop_distance && position.current_price) {
-        const trailingStopPrice = position.current_price - position.trailing_stop_distance;
+        const trailingStopPrice = position.side === 'LONG'
+          ? position.current_price - position.trailing_stop_distance
+          : position.current_price + position.trailing_stop_distance;
 
-        if (trailingStopPrice > position.stop_price) {
+        const shouldUpdate = position.side === 'LONG'
+          ? trailingStopPrice > position.stop_price
+          : trailingStopPrice < position.stop_price;
+
+        if (shouldUpdate) {
           console.log(`[PositionManager] Updating trailing stop for ${position.symbol}: $${position.stop_price.toFixed(2)} -> $${trailingStopPrice.toFixed(2)}`);
           position.stop_price = trailingStopPrice;
           await position.save();
@@ -174,9 +180,15 @@ export class PositionManager {
       }
 
       // Rule 4: Check stop loss hit
-      if (position.current_price && position.side === 'LONG' && position.current_price <= position.stop_price) {
-        console.log(`[PositionManager] Stop loss hit for ${position.symbol}: Price $${position.current_price.toFixed(2)} <= Stop $${position.stop_price.toFixed(2)}`);
-        await this.closePosition(positionId, 'STOP_LOSS');
+      if (position.current_price && position.stop_price) {
+        const stopHit = position.side === 'LONG'
+          ? position.current_price <= position.stop_price
+          : position.current_price >= position.stop_price;
+
+        if (stopHit) {
+          console.log(`[PositionManager] Stop loss hit for ${position.symbol}: Price $${position.current_price.toFixed(2)}, Stop $${position.stop_price.toFixed(2)}`);
+          await this.closePosition(positionId, 'STOP_LOSS');
+        }
       }
 
       // Rule 5: Check target hit (for Playbook B)
@@ -190,6 +202,90 @@ export class PositionManager {
           await this.closePosition(positionId, 'TARGET');
         }
       }
+
+      // Rule 6: Check time stop (for Playbook B)
+      if (position.playbook === 'B' && playbookConfig.time_stop_min) {
+        const holdTimeMs = Date.now() - position.opened_at.getTime();
+        const holdTimeMin = holdTimeMs / (1000 * 60);
+
+        if (holdTimeMin >= playbookConfig.time_stop_min) {
+          console.log(`[PositionManager] Time stop hit for ${position.symbol}: ${holdTimeMin.toFixed(0)} min >= ${playbookConfig.time_stop_min} min`);
+          await this.closePosition(positionId, 'TIME_STOP');
+        }
+      }
+
+      // Rule 7: Scale out (Playbook C - Stage 1)
+      if (position.playbook === 'C' && playbookConfig.scale_1_R && unrealizedR >= playbookConfig.scale_1_R) {
+        if (!position.scaled_1) {
+          console.log(`[PositionManager] Scaling out stage 1 for ${position.symbol} at ${unrealizedR.toFixed(2)}R`);
+
+          const scaleQty = position.quantity * playbookConfig.scale_1_pct;
+          const result = await executionRouter.executeSignal(
+            position.userId,
+            {
+              symbol: position.symbol,
+              playbook: position.playbook,
+              action: position.side === 'LONG' ? 'SELL' : 'BUY',
+              entryPrice: position.current_price || position.entry_price,
+              stopPrice: position.stop_price,
+              reason: 'Scale out stage 1',
+            },
+            scaleQty,
+            position._id
+          );
+
+          if (result.success) {
+            position.quantity -= scaleQty;
+            position.scaled_1 = true;
+            await position.save();
+            console.log(`[PositionManager] Scaled out ${scaleQty.toFixed(8)} units - Remaining: ${position.quantity.toFixed(8)}`);
+          }
+        }
+      }
+
+      // Rule 8: Scale out (Playbook C - Stage 2)
+      if (position.playbook === 'C' && playbookConfig.scale_2_R && unrealizedR >= playbookConfig.scale_2_R) {
+        if (!position.scaled_2 && position.scaled_1) {
+          console.log(`[PositionManager] Scaling out stage 2 for ${position.symbol} at ${unrealizedR.toFixed(2)}R`);
+
+          const scaleQty = position.quantity * playbookConfig.scale_2_pct;
+          const result = await executionRouter.executeSignal(
+            position.userId,
+            {
+              symbol: position.symbol,
+              playbook: position.playbook,
+              action: position.side === 'LONG' ? 'SELL' : 'BUY',
+              entryPrice: position.current_price || position.entry_price,
+              stopPrice: position.stop_price,
+              reason: 'Scale out stage 2',
+            },
+            scaleQty,
+            position._id
+          );
+
+          if (result.success) {
+            position.quantity -= scaleQty;
+            position.scaled_2 = true;
+
+            // Enable trailing stop after stage 2
+            if (playbookConfig.trail_atr_mult) {
+              const klines = await binanceService.getKlines(position.symbol, '15m', 15);
+              const atr = binanceService.calculateATR(klines, 14);
+              position.trailing_stop_distance = playbookConfig.trail_atr_mult * atr;
+              console.log(`[PositionManager] Trailing stop enabled: ${position.trailing_stop_distance.toFixed(2)}`);
+            }
+
+            await position.save();
+            console.log(`[PositionManager] Scaled out ${scaleQty.toFixed(8)} units - Remaining: ${position.quantity.toFixed(8)}`);
+          }
+        }
+      }
+
+      // Rule 9: Check target hit (for Playbook C)
+      if (position.playbook === 'C' && playbookConfig.target_R && unrealizedR >= playbookConfig.target_R) {
+        console.log(`[PositionManager] Target hit for ${position.symbol}: ${unrealizedR.toFixed(2)}R >= ${playbookConfig.target_R}R`);
+        await this.closePosition(positionId, 'TARGET');
+      }
     } catch (error) {
       console.error(`[PositionManager] Error managing position ${positionId}:`, error);
     }
@@ -200,7 +296,7 @@ export class PositionManager {
    */
   async closePosition(
     positionId: Types.ObjectId,
-    reason: 'STOP_LOSS' | 'TARGET' | 'MANUAL' | 'KILL_SWITCH'
+    reason: 'STOP_LOSS' | 'TARGET' | 'MANUAL' | 'KILL_SWITCH' | 'TIME_STOP'
   ): Promise<void> {
     try {
       const position = await Position.findById(positionId);

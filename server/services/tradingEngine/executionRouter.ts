@@ -190,8 +190,32 @@ export class ExecutionRouter {
 
       // Update order record with exchange response
       order.exchangeOrderId = binanceOrder.orderId.toString();
-      order.status = binanceOrder.status === 'FILLED' ? 'FILLED' : 'OPEN';
+      
+      // Map Binance order status
+      const statusMap: Record<string, string> = {
+        'NEW': 'OPEN',
+        'PARTIALLY_FILLED': 'PARTIAL',
+        'FILLED': 'FILLED',
+        'CANCELED': 'CANCELLED',
+        'REJECTED': 'REJECTED',
+        'EXPIRED': 'EXPIRED',
+      };
+      
+      order.status = statusMap[binanceOrder.status] || 'OPEN';
       order.filledQuantity = parseFloat(binanceOrder.executedQty);
+      
+      // Handle partial fills
+      if (order.status === 'PARTIAL') {
+        console.warn(`[ExecutionRouter] Order partially filled: ${order.filledQuantity}/${params.quantity}`);
+        // Cancel unfilled portion to avoid hanging orders
+        try {
+          await binanceService.cancelOrder(params.symbol, binanceOrder.orderId);
+          order.status = 'PARTIAL_CANCELLED';
+          console.log(`[ExecutionRouter] Cancelled unfilled portion of partial order`);
+        } catch (cancelError) {
+          console.error(`[ExecutionRouter] Failed to cancel partial order:`, cancelError);
+        }
+      }
       order.evidence = {
         requestPayload: params,
         responsePayload: binanceOrder,

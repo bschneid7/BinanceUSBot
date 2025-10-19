@@ -173,10 +173,13 @@ export class RiskEngine {
       // Check if we need to reset daily counters
       const currentSessionStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       if (state.sessionStartDate < currentSessionStart) {
-        console.log('[RiskEngine] New trading day detected - resetting daily PnL');
+        console.log('[RiskEngine] New trading day detected - resetting daily PnL and Playbook B counters');
         state.dailyPnl = 0;
         state.dailyPnlR = 0;
         state.sessionStartDate = currentSessionStart;
+        
+        // Reset Playbook B session counters
+        state.playbookBCounters.clear();
       }
 
       // Check if we need to reset weekly counters

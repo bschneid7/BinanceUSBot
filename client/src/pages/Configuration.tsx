@@ -196,7 +196,10 @@ export function Configuration() {
       <ConfigSection
         title="Playbook D: Dip Pullback"
         description="Dip-buying strategy (uses reserve settings)"
-        fields={[{ key: 'enable', label: 'Enable Playbook', type: 'boolean', value: config.playbook_D.enable }]}
+        fields={[
+          { key: 'enable', label: 'Enable Playbook', type: 'boolean', value: config.playbook_D.enable },
+          { key: 'stop_atr_mult', label: 'Stop ATR Multiplier', type: 'number', value: config.playbook_D.stop_atr_mult, min: 0.5, max: 3.0, step: 0.1 },
+        ]}
         onChange={(key, value) => handleFieldChange('playbook_D', key, value)}
       />
     </div>

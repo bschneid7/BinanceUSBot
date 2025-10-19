@@ -365,7 +365,7 @@ export class SignalGenerator {
       const swingLow = Math.min(...recentLows);
 
       // Calculate stop price: below first ladder
-      const stopDistance = 1.0 * atr;
+      const stopDistance = config.playbook_D.stop_atr_mult * atr;
       const stopPrice = swingLow - stopDistance;
 
       console.log(`[PlaybookD] ${symbol} - SIGNAL: Dip pullback - ${Math.abs(sigmaMove).toFixed(2)}σ move, Volume: ${volumeMultiple.toFixed(2)}x, Entry: $${price.toFixed(2)}, Swing low: $${swingLow.toFixed(2)}, Stop: $${stopPrice.toFixed(2)}`);

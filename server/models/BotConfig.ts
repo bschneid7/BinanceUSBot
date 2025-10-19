@@ -63,6 +63,7 @@ export interface IBotConfig extends Document {
   };
   playbook_D: {
     enable: boolean;
+    stop_atr_mult: number;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -314,6 +315,11 @@ const schema = new Schema<IBotConfig>({
       type: Boolean,
       required: true,
       default: true,
+    },
+    stop_atr_mult: {
+      type: Number,
+      required: true,
+      default: 1.0,
     },
   },
 }, {
