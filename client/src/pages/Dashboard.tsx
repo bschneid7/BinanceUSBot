@@ -28,10 +28,10 @@ export function Dashboard() {
         getAlerts(20)
       ]);
 
-      setBotStatus(statusRes);
-      setPositions(positionsRes.positions);
-      setSignals(signalsRes.signals);
-      setAlerts(alertsRes.alerts);
+      setBotStatus(statusRes || null);
+      setPositions(positionsRes?.positions || []);
+      setSignals(signalsRes?.signals || []);
+      setAlerts(alertsRes?.alerts || []);
       setLoading(false);
     } catch (error: unknown) {
       console.error('Error loading dashboard data:', error);
