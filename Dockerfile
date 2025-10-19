@@ -20,7 +20,7 @@ COPY server/package*.json ./server/
 COPY shared/package*.json ./shared/
 
 # Install dependencies
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # Build the application
 FROM base AS builder
@@ -55,7 +55,7 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Install Python packages for ML/sentiment proxy
-RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN pip3 install --break-system-packages --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Create a non-root user
 RUN addgroup --system --gid 1001 nodejs

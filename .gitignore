@@ -9,3 +9,19 @@ package-lock.json
 uploads
 fileDescriptions.json
 shared/dist/
+
+# Environment files with credentials
+.env.production
+.env.local
+.env.*.local
+
+# Compiled TypeScript files
+server/dist/
+client/dist/
+
+# Docker backup files
+*.backup
+
+# Log files
+*.log
+logs/
