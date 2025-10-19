@@ -3,7 +3,7 @@ import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import Position from '../../models/Position';
 import marketScanner from './marketScanner';
-import signalGenerator from './signalGenerator';
+import mlEnhancedSignalGenerator from './mlEnhancedSignalGenerator';
 import riskEngine from './riskEngine';
 import executionRouter from './executionRouter';
 import positionManager from './positionManager';
@@ -146,7 +146,7 @@ export class TradingEngine {
       const marketData = await marketScanner.scanMarkets(userId);
 
       // Step 5: Generate signals
-      const signals = await signalGenerator.generateSignals(userId, marketData);
+      const signals = await mlEnhancedSignalGenerator.generateSignals(userId, marketData);
 
       console.log(`[TradingEngine] Generated ${signals.length} signals`);
 
