@@ -11,6 +11,7 @@ import { Positions } from './pages/Positions';
 import { TradeHistory } from './pages/TradeHistory';
 import { Analytics } from './pages/Analytics';
 import { Configuration } from './pages/Configuration';
+import { Account } from "./pages/Account";
 import { TaxReports } from './pages/TaxReports';
 import { Controls } from './pages/Controls';
 import { BlankPage } from './pages/BlankPage';
@@ -37,6 +38,7 @@ function App() {
               <Route path="trades" element={<TradeHistory />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="config" element={<Configuration />} />
+              <Route path="account" element={<Account />} />
               <Route path="tax" element={<TaxReports />} />
               <Route path="controls" element={<Controls />} />
               <Route path="ml" element={<MLDashboard />} />

@@ -60,8 +60,22 @@ router.get('/', requireUser(ALL_ROLES), async (req: AuthRequest, res: Response) 
 
     const positions = await PositionService.getAllPositions(req.user._id, filters);
 
+    // Add computed totalValue field and format numbers
+    const positionsWithValue = positions.map(pos => {
+      const posObj = pos.toObject();
+      const currentPrice = posObj.current_price || posObj.entry_price;
+      posObj.totalValue = currentPrice * posObj.quantity;
+      
+      // Round stop_price to 4 significant digits
+      if (posObj.stop_price) {
+        posObj.stop_price = parseFloat(posObj.stop_price.toPrecision(4));
+      }
+      
+      return posObj;
+    });
+
     console.log(`[GET /api/positions] Returning ${positions.length} positions`);
-    return res.status(200).json({ positions });
+    return res.status(200).json({ positions: positionsWithValue });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`[GET /api/positions] Error:`, error);

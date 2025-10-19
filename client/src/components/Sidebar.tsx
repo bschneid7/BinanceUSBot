@@ -9,6 +9,7 @@ const navigation = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'ML Dashboard', href: '/ml', icon: Brain },
   { name: 'Configuration', href: '/config', icon: Settings },
+  { name: 'Account', href: '/account', icon: Settings },
   { name: 'Tax Reports', href: '/tax', icon: FileText },
   { name: 'Controls', href: '/controls', icon: AlertTriangle }
 ];

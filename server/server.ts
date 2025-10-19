@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import { Request, Response } from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import basicRoutes from './routes/index';
 import authRoutes from './routes/authRoutes';
 import positionRoutes from './routes/positionRoutes';
@@ -45,8 +47,8 @@ app.on("error", (error: Error) => {
   console.error(error.stack);
 });
 
-// Basic Routes
-app.use(basicRoutes);
+// API Routes
+app.use('/api/health', basicRoutes);
 // Authentication Routes
 app.use('/api/auth', authRoutes);
 // Position Routes
@@ -72,9 +74,15 @@ app.use('/api/ppo', ppoRoutes);
 // ML Routes
 app.use('/api/ml', mlRoutes);
 
-// If no routes handled the request, it's a 404
-app.use((req: Request, res: Response) => {
-  res.status(404).send("Page not found.");
+// Serve static files from React app in production
+// Use absolute path since we're running TypeScript directly with tsx
+const clientDistPath = path.join('/opt/binance-bot/client/dist');
+console.log('Serving static files from:', clientDistPath);
+app.use(express.static(clientDistPath));
+
+// Handle React routing, return all requests to React app
+app.get('*', (req: Request, res: Response) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'));
 });
 
 // Error handling

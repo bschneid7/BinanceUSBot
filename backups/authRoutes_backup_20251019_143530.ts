@@ -54,8 +54,30 @@ router.post('/login', async (req: Request, res: Response) => {
 // Endpoint: POST /api/auth/register
 // Request: { email: string, password: string }
 // Response: { _id, email, ... }
-router.post("/register", async (req: Request, res: Response) => {
-  return res.status(403).json({ message: "Registration is disabled" });
+router.post('/register', async (req: AuthRequest, res: Response) => {
+  try {
+    console.log(`[POST /api/auth/register] Registration attempt blocked for email: ${req.body.email}`);
+    
+    // SECURITY: Registration disabled - this is a private bot instance
+    return res.status(403).json({ 
+      error: 'Registration is disabled',
+      message: 'This is a private bot instance. Contact the administrator for access.'
+    });
+    
+    /* Original registration code disabled
+    if (req.user) {
+      return res.json({ user: req.user });
+    }
+
+    const user = await UserService.create(req.body);
+    console.log(`[POST /api/auth/register] User created successfully: ${user._id}`);
+    return res.status(200).json(user);
+    */
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[POST /api/auth/register] Registration error:`, error);
+    return res.status(400).json({ message: errorMessage });
+  }
 });
 
 // Description: Logout user
