@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import tradingEngine from '../services/tradingEngine';
+import User from '../models/User';
 
 dotenv.config();
 
@@ -12,6 +14,9 @@ const connectDB = async (): Promise<void> => {
     const conn = await mongoose.connect(mongoUri);
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+
+    // Auto-start trading engine for all users
+    await autoStartTradingEngine();
 
     mongoose.connection.on('error', (err: Error) => {
       console.error(`MongoDB connection error: ${err}`);
@@ -39,6 +44,40 @@ const connectDB = async (): Promise<void> => {
   } catch (error) {
     console.error(`Error: ${(error as Error).message}`);
     process.exit(1);
+  }
+};
+
+/**
+ * Auto-start trading engine for all active users
+ */
+const autoStartTradingEngine = async (): Promise<void> => {
+  try {
+    console.log('[AutoStart] Checking for users to start trading engine...');
+    
+    // Find all users
+    const users = await User.find({});
+    
+    if (users.length === 0) {
+      console.log('[AutoStart] No users found');
+      return;
+    }
+
+    console.log(`[AutoStart] Found ${users.length} user(s)`);
+    
+    // Start trading engine for each user
+    for (const user of users) {
+      try {
+        console.log(`[AutoStart] Starting trading engine for user ${user._id}...`);
+        await tradingEngine.start(user._id);
+        console.log(`[AutoStart] ✓ Trading engine started for user ${user._id}`);
+      } catch (error) {
+        console.error(`[AutoStart] Failed to start trading engine for user ${user._id}:`, error);
+      }
+    }
+    
+    console.log('[AutoStart] Trading engine auto-start complete');
+  } catch (error) {
+    console.error('[AutoStart] Error during trading engine auto-start:', error);
   }
 };
 

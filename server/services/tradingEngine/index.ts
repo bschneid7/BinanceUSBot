@@ -21,12 +21,15 @@ export class TradingEngine {
     try {
       console.log(`[TradingEngine] Starting engine for user ${userId}`);
 
-      // Check if already running
-      const state = await BotState.findOne({ userId });
-      if (state?.isRunning) {
-        console.log('[TradingEngine] Engine already running');
+      // Check if scan interval is already active
+      const userIdStr = userId.toString();
+      if (this.scanIntervals.has(userIdStr)) {
+        console.log('[TradingEngine] Engine already running (scan interval active)');
         return;
       }
+
+      // Get or create state
+      const state = await BotState.findOne({ userId });
 
       // Initialize or update state
       let botState = state;
