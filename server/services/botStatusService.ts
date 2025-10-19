@@ -3,6 +3,7 @@ import Trade from '../models/Trade';
 import Signal from '../models/Signal';
 import Alert from '../models/Alert';
 import BotConfig from '../models/BotConfig';
+import BotState from '../models/BotState';
 import { Types } from 'mongoose';
 
 interface BotStatusMetrics {
@@ -96,7 +97,9 @@ class BotStatusService {
       const allClosedTrades = await Trade.find({ userId });
       const totalRealizedPnl = allClosedTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
 
-      const startingEquity = 7000; // This should come from config or initial balance
+      // Get starting equity from BotState (synced from Binance)
+      const botState = await BotState.findOne({ userId });
+      const startingEquity = botState?.equity || 7000; // Fallback to 7000 if not found
       const equity = startingEquity + totalRealizedPnl + totalUnrealizedPnl;
 
       console.log(`[BotStatusService] Calculated equity: $${equity.toFixed(2)}`);
