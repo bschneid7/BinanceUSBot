@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import express from 'express';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import basicRoutes from './routes/index';
@@ -89,7 +89,7 @@ app.get('*', (req: Request, res: Response) => {
 });
 
 // Error handling
-app.use((err: Error, req: Request, res: Response) => {
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(`Unhandled application error: ${err.message}`);
   console.error(err.stack);
   res.status(500).send("There was an error serving your request.");
