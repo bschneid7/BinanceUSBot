@@ -31,8 +31,8 @@ router.post('/login', async (req: Request, res: Response) => {
 
     if (user) {
       console.log(`[POST /api/auth/login] User authenticated successfully: ${user._id}`);
-      const accessToken = generateAccessToken(user);
-      const refreshToken = generateRefreshToken(user);
+      const accessToken = generateAccessToken(user._id.toString());
+      const refreshToken = generateRefreshToken(user._id.toString());
 
       user.refreshToken = refreshToken;
       await user.save();
