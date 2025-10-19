@@ -34,6 +34,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: ${PORT:-3000}
+      DOCKER_ENV: "true"
       MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeThisPassword}@mongo:27017/${MONGO_DB_NAME:-binance_bot}?authSource=admin
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}

@@ -96,6 +96,20 @@ export function Configuration() {
       </div>
 
       <ConfigSection
+        title="Market Scanner"
+        description="Market scanning and pair selection settings"
+        fields={[
+          { key: 'refresh_ms', label: 'Refresh Interval (ms)', type: 'number', value: config.scanner.refresh_ms, step: 100, min: 1000, max: 10000 },
+          { key: 'min_volume_usd_24h', label: 'Min 24h Volume (USD)', type: 'number', value: config.scanner.min_volume_usd_24h, step: 100000, min: 500000, max: 10000000 },
+          { key: 'max_spread_bps', label: 'Max Spread (bps)', type: 'number', value: config.scanner.max_spread_bps, step: 1, min: 1, max: 20 },
+          { key: 'max_spread_bps_event', label: 'Max Spread Event (bps)', type: 'number', value: config.scanner.max_spread_bps_event, step: 1, min: 5, max: 30 },
+          { key: 'tob_min_depth_usd', label: 'Min Order Book Depth (USD)', type: 'number', value: config.scanner.tob_min_depth_usd, step: 5000, min: 10000, max: 100000 },
+          { key: 'pair_signal_cooldown_min', label: 'Signal Cooldown (min)', type: 'number', value: config.scanner.pair_signal_cooldown_min, step: 5, min: 5, max: 60 }
+        ]}
+        onChange={(key, value) => handleFieldChange('scanner', key, value)}
+      />
+
+      <ConfigSection
         title="Risk Management"
         description="Core risk parameters and limits"
         fields={[
@@ -106,7 +120,8 @@ export function Configuration() {
           { key: 'max_exposure_pct', label: 'Max Exposure (%)', type: 'number', value: config.risk.max_exposure_pct * 100, step: 5, min: 30, max: 80 },
           { key: 'max_positions', label: 'Max Positions', type: 'number', value: config.risk.max_positions, step: 1, min: 1, max: 10 },
           { key: 'correlation_guard', label: 'Correlation Guard', type: 'boolean', value: config.risk.correlation_guard },
-          { key: 'slippage_guard_bps', label: 'Slippage Guard (bps)', type: 'number', value: config.risk.slippage_guard_bps, step: 1, min: 1, max: 20 }
+          { key: 'slippage_guard_bps', label: 'Slippage Guard (bps)', type: 'number', value: config.risk.slippage_guard_bps, step: 1, min: 1, max: 20 },
+          { key: 'slippage_guard_bps_event', label: 'Slippage Guard Event (bps)', type: 'number', value: config.risk.slippage_guard_bps_event, step: 1, min: 5, max: 30 }
         ]}
         onChange={(key, value) => {
           let adjustedValue = value;

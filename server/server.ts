@@ -22,8 +22,8 @@ import cors from 'cors';
 // Load environment variables
 dotenv.config();
 
-if (!process.env.DATABASE_URL) {
-  console.error("Error: DATABASE_URL variables in .env missing.");
+if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
+  console.error("Error: MONGO_URI or DATABASE_URL environment variable is missing.");
   process.exit(-1);
 }
 
@@ -75,8 +75,11 @@ app.use('/api/ppo', ppoRoutes);
 app.use('/api/ml', mlRoutes);
 
 // Serve static files from React app in production
-// Use absolute path since we're running TypeScript directly with tsx
-const clientDistPath = path.join('/opt/binance-bot/client/dist');
+// Use dynamic path based on environment
+const clientDistPath = process.env.CLIENT_DIST_PATH || 
+  (process.env.NODE_ENV === 'production' && process.env.DOCKER_ENV === 'true'
+    ? path.join('/app/client/dist')
+    : path.join('/opt/binance-bot/client/dist'));
 console.log('Serving static files from:', clientDistPath);
 app.use(express.static(clientDistPath));
 
