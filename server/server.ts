@@ -34,10 +34,20 @@ const port = process.env.PORT || 3000;
 app.enable('json spaces');
 // We want to be consistent with URL paths, so we enable strict routing
 app.enable('strict routing');
+// Disable ETag generation to prevent 304 Not Modified responses
+app.set('etag', false);
 
 app.use(cors({}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Disable caching for API routes
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 
 // Database connection
 connectDB();
