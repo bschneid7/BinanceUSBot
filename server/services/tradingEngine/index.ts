@@ -13,6 +13,7 @@ import binanceService from '../binanceService';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private runningScans: Set<string> = new Set(); // Track active scan cycles
 
   /**
    * Start the trading engine for a user
@@ -55,13 +56,40 @@ export class TradingEngine {
         throw new Error('Bot configuration not found');
       }
 
-      // Start scan loop
-      const scanInterval = setInterval(async () => {
-        await this.executeScanCycle(userId);
-      }, config.scanner.refresh_ms);
-
-      this.scanIntervals.set(userId.toString(), scanInterval);
-
+      // Start self-scheduling scan loop (prevents overlaps)
+      const scheduleNextScan = async () => {
+        const userKey = userId.toString();
+        
+        // Check if already running
+        if (this.runningScans.has(userKey)) {
+          console.log('[TradingEngine] Scan cycle still running, skipping...');
+          return;
+        }
+        
+        this.runningScans.add(userKey);
+        
+        try {
+          await this.executeScanCycle(userId);
+        } catch (error) {
+          console.error('[TradingEngine] Scan cycle error:', error);
+        } finally {
+          this.runningScans.delete(userKey);
+          
+          // Check if engine is still supposed to be running
+          const currentState = await BotState.findOne({ userId });
+          if (currentState?.isRunning) {
+            // Schedule next scan
+            const currentConfig = await BotConfig.findOne({ userId });
+            const refreshMs = currentConfig?.scanner?.refresh_ms ?? 50000;
+            const timeout = setTimeout(scheduleNextScan, refreshMs);
+            this.scanIntervals.set(userKey, timeout);
+          }
+        }
+      };
+      
+      // Start first scan immediately
+      setTimeout(scheduleNextScan, 0);
+      
       console.log(`[TradingEngine] Engine started - Scanning every ${config.scanner.refresh_ms}ms`);
     } catch (error) {
       console.error('[TradingEngine] Error starting engine:', error);
@@ -76,12 +104,19 @@ export class TradingEngine {
     try {
       console.log(`[TradingEngine] Stopping engine for user ${userId}`);
 
-      const interval = this.scanIntervals.get(userId.toString());
-      if (interval) {
-        clearInterval(interval);
-        this.scanIntervals.delete(userId.toString());
+      const userKey = userId.toString();
+      
+      // Clear timeout
+      const timeout = this.scanIntervals.get(userKey);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.scanIntervals.delete(userKey);
       }
+      
+      // Remove from running scans
+      this.runningScans.delete(userKey);
 
+      // Update state
       const state = await BotState.findOne({ userId });
       if (state) {
         state.isRunning = false;
@@ -295,20 +330,74 @@ export class TradingEngine {
         totalUnrealizedPnl += position.unrealized_pnl || 0;
       });
 
-      // Fetch actual account balance from Binance
-      let baseEquity = 7000; // Default fallback
+      // Use existing equity from BotState
+      // The equity should be synced manually using the balance sync script
+      // or updated when Binance API credentials are configured
+      let baseEquity = state.equity || 7000; // Use existing equity as fallback
       
+      // Only attempt to sync from Binance if API is properly configured
       if (binanceService.isConfigured()) {
         try {
           const accountInfo = await binanceService.getAccountInfo();
-          const usdBalance = accountInfo.balances.find(b => b.asset === 'USD' || b.asset === 'USDT');
-          if (usdBalance) {
-            baseEquity = parseFloat(usdBalance.free) + parseFloat(usdBalance.locked);
-            console.log(`[TradingEngine] Synced base equity from Binance: $${baseEquity.toFixed(2)}`);
+          
+          // Calculate total portfolio value in USD
+          let totalValue = 0;
+          
+          for (const balance of accountInfo.balances) {
+            const free = parseFloat(balance.free);
+            const locked = parseFloat(balance.locked);
+            const total = free + locked;
+            
+            if (total > 0) {
+              if (balance.asset === 'USD' || balance.asset === 'USDT' || balance.asset === 'USDC') {
+                // Stablecoins count as 1:1 USD
+                totalValue += total;
+              } else {
+                // For other assets, get current price and convert to USD
+                // Try multiple quote currencies: USDT, USD, USDC
+                let priceFound = false;
+                for (const quote of ['USDT', 'USD', 'USDC']) {
+                  try {
+                    const symbol = `${balance.asset}${quote}`;
+                    const ticker = await binanceService.getTickerPrice(symbol);
+                    if (ticker && ticker.price) {
+                      totalValue += total * parseFloat(ticker.price);
+                      priceFound = true;
+                      break;
+                    }
+                  } catch (priceError) {
+                    // Try next quote currency
+                    continue;
+                  }
+                }
+                if (!priceFound) {
+                  console.debug(`[TradingEngine] Could not get price for ${balance.asset}`);
+                }
+              }
+            }
+          }
+          
+          if (totalValue > 0) {
+            // Only use the calculated value if it's reasonable (at least 80% of existing equity)
+            // This prevents incorrect valuations when price lookups fail
+            const minExpectedEquity = (state.equity || 0) * 0.8;
+            if (totalValue >= minExpectedEquity || !state.equity) {
+              baseEquity = totalValue;
+              console.log(`[TradingEngine] Synced base equity from Binance API: $${baseEquity.toFixed(2)}`);
+            } else {
+              console.warn(`[TradingEngine] Calculated equity ($${totalValue.toFixed(2)}) is much lower than existing ($${state.equity.toFixed(2)}), keeping existing value`);
+              console.warn(`[TradingEngine] This usually means price lookups failed for crypto assets`);
+              // Keep existing baseEquity
+            }
+          } else {
+            console.log(`[TradingEngine] Binance API returned 0, using existing equity: $${baseEquity.toFixed(2)}`);
           }
         } catch (error) {
-          console.warn('[TradingEngine] Could not fetch account balance, using default');
+          console.log(`[TradingEngine] Could not sync from Binance API, using existing equity: $${baseEquity.toFixed(2)}`);
         }
+      } else {
+        // API not configured - this is normal, equity should be synced manually
+        console.log(`[TradingEngine] Using existing equity (Binance API not configured): $${baseEquity.toFixed(2)}`);
       }
 
       // Update equity

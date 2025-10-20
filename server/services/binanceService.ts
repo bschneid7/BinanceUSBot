@@ -86,6 +86,9 @@ class BinanceService {
   private apiSecret: string;
   private baseUrl: string;
   private client: AxiosInstance;
+  private timeOffsetMs: number = 0;
+  private lastTimeSync: number = 0;
+  private recvWindowMs: number = 5000;
 
   constructor() {
     this.apiKey = process.env.BINANCE_US_API_KEY || '';
@@ -108,6 +111,25 @@ class BinanceService {
   }
 
   /**
+   * Sync server time to prevent TIMESTAMP errors
+   */
+  private async syncTime(): Promise<void> {
+    const now = Date.now();
+    // Sync every 60 seconds
+    if (now - this.lastTimeSync < 60_000) return;
+    
+    try {
+      const { data } = await this.client.get('/api/v3/time');
+      this.timeOffsetMs = Number(data.serverTime) - now;
+      this.lastTimeSync = now;
+      console.log(`[BinanceService] Time synced, offset: ${this.timeOffsetMs}ms`);
+    } catch (error) {
+      console.error('[BinanceService] Time sync failed:', error);
+      // Continue with current offset
+    }
+  }
+
+  /**
    * Generate signature for authenticated requests
    */
   private generateSignature(queryString: string): string {
@@ -118,7 +140,7 @@ class BinanceService {
   }
 
   /**
-   * Make signed request to Binance API
+   * Make signed request to Binance API with retry logic
    */
   private async signedRequest(
     method: 'GET' | 'POST' | 'DELETE',
@@ -129,8 +151,12 @@ class BinanceService {
       throw new Error('Binance API credentials not configured');
     }
 
-    const timestamp = Date.now();
-    const queryParams = { ...params, timestamp };
+    // Sync server time
+    await this.syncTime();
+
+    const timestamp = Date.now() + this.timeOffsetMs;
+    const recvWindow = this.recvWindowMs;
+    const queryParams = { ...params, timestamp, recvWindow };
     const queryString = new URLSearchParams(
       queryParams as Record<string, string>
     ).toString();
@@ -146,29 +172,59 @@ class BinanceService {
       },
     };
 
-    try {
-      const response =
-        method === 'GET'
-          ? await this.client.get(endpoint, config)
-          : method === 'POST'
-          ? await this.client.post(endpoint, null, config)
-          : await this.client.delete(endpoint, config);
+    // Retry logic with jittered backoff
+    const maxRetries = 3;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response =
+          method === 'GET'
+            ? await this.client.get(endpoint, config)
+            : method === 'POST'
+            ? await this.client.post(endpoint, null, config)
+            : await this.client.delete(endpoint, config);
 
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error(
-          `[BinanceService] API error on ${method} ${endpoint}:`,
-          error.response?.data || error.message
-        );
-        throw new Error(
-          error.response?.data?.msg ||
-            error.message ||
-            'Binance API request failed'
-        );
+        return response.data;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
+          const code = error.response?.data?.code;
+          
+          // Retry on rate limit or server errors
+          const shouldRetry = 
+            status === 429 || // Rate limit
+            code === -1003 ||  // Too many requests
+            code === -1006 ||  // Unexpected response
+            status === 503;    // Service unavailable
+          
+          if (shouldRetry && attempt < maxRetries) {
+            // Jittered exponential backoff
+            const baseDelay = 300 * (attempt + 1);
+            const jitter = Math.floor(Math.random() * 200);
+            const delay = baseDelay + jitter;
+            
+            console.log(
+              `[BinanceService] Retry ${attempt + 1}/${maxRetries} after ${delay}ms for ${method} ${endpoint}`
+            );
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          
+          console.error(
+            `[BinanceService] API error on ${method} ${endpoint}:`,
+            error.response?.data || error.message
+          );
+          throw new Error(
+            error.response?.data?.msg ||
+              error.message ||
+              'Binance API request failed'
+          );
+        }
+        throw error;
       }
-      throw error;
     }
+    
+    throw new Error(`Binance request failed after ${maxRetries} retries`);
   }
 
   /**
@@ -258,6 +314,7 @@ class BinanceService {
     stopPrice?: number;
     timeInForce?: 'GTC' | 'IOC' | 'FOK';
     newClientOrderId?: string;
+    newOrderRespType?: 'ACK' | 'RESULT' | 'FULL';
   }): Promise<BinanceOrderResponse> {
     console.log('[BinanceService] Placing order:', params);
 
@@ -266,6 +323,7 @@ class BinanceService {
       side: params.side,
       type: params.type,
       quantity: params.quantity,
+      newOrderRespType: params.newOrderRespType ?? 'FULL', // Default to FULL for fee data
     };
 
     if (params.price) orderParams.price = params.price;
