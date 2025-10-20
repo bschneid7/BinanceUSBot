@@ -61,13 +61,27 @@ export class ExecutionRouter {
         }
       }
 
+      // Pre-trade slippage check
+      const currentTicker = await binanceService.getTicker(signal.symbol);
+      const currentPrice = parseFloat(currentTicker.lastPrice);
+      const priceChange = Math.abs(currentPrice - signal.entryPrice);
+      const preTradeSlippageBps = (priceChange / signal.entryPrice) * 10000;
+
+      console.log(`[ExecutionRouter] Pre-trade check: Signal price $${signal.entryPrice.toFixed(2)}, Current $${currentPrice.toFixed(2)}, Slippage ${preTradeSlippageBps.toFixed(2)}bps`);
+
+      // Check if slippage exceeds limits before placing order
+      const maxSlippageBps = signal.isEvent ? config.risk.slippage_guard_bps_event : config.risk.slippage_guard_bps;
+      if (preTradeSlippageBps > maxSlippageBps) {
+        console.warn(`[ExecutionRouter] Pre-trade slippage ${preTradeSlippageBps.toFixed(2)}bps exceeds limit ${maxSlippageBps}bps - rejecting order`);
+        return {
+          success: false,
+          error: `Pre-trade slippage too high: ${preTradeSlippageBps.toFixed(2)}bps > ${maxSlippageBps}bps`,
+        };
+      }
+
       // For normal conditions, prefer POST-ONLY limit orders (maker)
       // For events or if price has moved significantly, use market orders
       if (signal.isEvent) {
-        // Check signal decay
-        const currentTicker = await binanceService.getTicker(signal.symbol);
-        const currentPrice = parseFloat(currentTicker.lastPrice);
-        const priceChange = Math.abs(currentPrice - signal.entryPrice);
         const changePercent = (priceChange / signal.entryPrice) * 100;
 
         if (changePercent > 0.2) {
@@ -209,30 +223,26 @@ export class ExecutionRouter {
       // Update order record with exchange response
       order.exchangeOrderId = binanceOrder.orderId.toString();
       
-      // Map Binance order status
-      const statusMap: Record<string, string> = {
+      // Map Binance order status to schema-accurate values
+      // Schema enums: 'PENDING' | 'OPEN' | 'FILLED' | 'PARTIALLY_FILLED' | 'CANCELLED' | 'REJECTED'
+      const statusMap: Record<string, IOrder['status']> = {
         'NEW': 'OPEN',
-        'PARTIALLY_FILLED': 'PARTIAL',
+        'PARTIALLY_FILLED': 'PARTIALLY_FILLED',  // Fixed: was 'PARTIAL'
         'FILLED': 'FILLED',
         'CANCELED': 'CANCELLED',
         'REJECTED': 'REJECTED',
-        'EXPIRED': 'EXPIRED',
+        'EXPIRED': 'CANCELLED',  // Treat expired as cancelled
       };
       
       order.status = statusMap[binanceOrder.status] || 'OPEN';
       order.filledQuantity = parseFloat(binanceOrder.executedQty);
       
-      // Handle partial fills
-      if (order.status === 'PARTIAL') {
-        console.warn(`[ExecutionRouter] Order partially filled: ${order.filledQuantity}/${params.quantity}`);
-        // Cancel unfilled portion to avoid hanging orders
-        try {
-          await binanceService.cancelOrder(params.symbol, binanceOrder.orderId);
-          order.status = 'PARTIAL_CANCELLED';
-          console.log(`[ExecutionRouter] Cancelled unfilled portion of partial order`);
-        } catch (cancelError) {
-          console.error(`[ExecutionRouter] Failed to cancel partial order:`, cancelError);
-        }
+      // Handle partial fills - keep order open for remaining quantity
+      if (order.status === 'PARTIALLY_FILLED') {
+        const remainingQty = params.quantity - order.filledQuantity;
+        console.warn(`[ExecutionRouter] Order partially filled: ${order.filledQuantity}/${params.quantity} (${remainingQty} remaining)`);
+        // Note: Order remains OPEN on exchange for the unfilled portion
+        // Position manager will track this and update when fully filled or cancelled
       }
       order.evidence = {
         requestPayload: params,
