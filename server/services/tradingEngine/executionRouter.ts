@@ -7,6 +7,7 @@ import { TradingSignal } from './signalGenerator';
 import riskEngine from './riskEngine';
 import makerFirstExecution from '../makerFirstExecution';
 import exchangeInfoCache from '../exchangeInfoCache';
+import policyGuardrails from './policyGuardrails';
 
 export interface OrderResult {
   success: boolean;
@@ -61,7 +62,7 @@ export class ExecutionRouter {
         }
       }
 
-      // Pre-trade slippage check
+      // Get current price for pre-trade checks
       const currentTicker = await binanceService.getTicker(signal.symbol);
       const currentPrice = parseFloat(currentTicker.lastPrice);
       const priceChange = Math.abs(currentPrice - signal.entryPrice);
@@ -69,13 +70,30 @@ export class ExecutionRouter {
 
       console.log(`[ExecutionRouter] Pre-trade check: Signal price $${signal.entryPrice.toFixed(2)}, Current $${currentPrice.toFixed(2)}, Slippage ${preTradeSlippageBps.toFixed(2)}bps`);
 
-      // Check if slippage exceeds limits before placing order
-      const maxSlippageBps = signal.isEvent ? config.risk.slippage_guard_bps_event : config.risk.slippage_guard_bps;
-      if (preTradeSlippageBps > maxSlippageBps) {
-        console.warn(`[ExecutionRouter] Pre-trade slippage ${preTradeSlippageBps.toFixed(2)}bps exceeds limit ${maxSlippageBps}bps - rejecting order`);
+      // Calculate proposed risk and notional
+      const proposedNotional = quantity * price;
+      const riskPerUnit = Math.abs(signal.entryPrice - signal.stopPrice);
+      const proposedRiskR = riskPerUnit * quantity / (config.risk.R_pct * 7000); // Approximate R
+
+      // Run comprehensive pre-trade gates
+      const gateCheck = await policyGuardrails.checkAllPreTradeGates({
+        userId,
+        symbol: signal.symbol,
+        action: signal.action,
+        side: signal.action === 'BUY' ? 'LONG' : 'SHORT',
+        quantity,
+        price,
+        signalPrice: signal.entryPrice,
+        proposedRiskR,
+        proposedNotional,
+        isEvent: signal.isEvent || false,
+      });
+
+      if (!gateCheck.approved) {
+        console.warn(`[ExecutionRouter] Pre-trade gate failed: ${gateCheck.reason}`);
         return {
           success: false,
-          error: `Pre-trade slippage too high: ${preTradeSlippageBps.toFixed(2)}bps > ${maxSlippageBps}bps`,
+          error: `Pre-trade gate failed (${gateCheck.gate}): ${gateCheck.reason}`,
         };
       }
 

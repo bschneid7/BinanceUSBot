@@ -20,6 +20,7 @@ export interface IBotConfig extends Document {
   };
   risk: {
     R_pct: number;
+    max_r_per_trade: number;
     daily_stop_R: number;
     weekly_stop_R: number;
     max_open_R: number;
@@ -140,6 +141,11 @@ const schema = new Schema<IBotConfig>({
       type: Number,
       required: true,
       default: 0.006,
+    },
+    max_r_per_trade: {
+      type: Number,
+      required: true,
+      default: 1.0,
     },
     daily_stop_R: {
       type: Number,
