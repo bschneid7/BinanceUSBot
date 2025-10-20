@@ -10,6 +10,9 @@ import positionManager from './positionManager';
 import reserveManager from './reserveManager';
 import killSwitch from './killSwitch';
 import binanceService from '../binanceService';
+import lossLimitService from '../lossLimitService';
+import positionReconciliationService from '../positionReconciliationService';
+import exchangeInfoCache from '../exchangeInfoCache';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -55,6 +58,19 @@ export class TradingEngine {
       if (!config) {
         throw new Error('Bot configuration not found');
       }
+
+      // Initialize exchange info cache
+      console.log('[TradingEngine] Initializing exchange info cache...');
+      await exchangeInfoCache.refresh();
+
+      // Run position reconciliation on startup
+      console.log('[TradingEngine] Running position reconciliation...');
+      const reconciliationResult = await positionReconciliationService.reconcile(userId);
+      console.log('[TradingEngine] Reconciliation complete:', {
+        matched: reconciliationResult.matched,
+        fixed: reconciliationResult.fixed,
+        errors: reconciliationResult.errors.length,
+      });
 
       // Start self-scheduling scan loop (prevents overlaps)
       const scheduleNextScan = async () => {
@@ -174,6 +190,13 @@ export class TradingEngine {
           killSwitchResult.haltType!,
           killSwitchResult.reason!
         );
+        return;
+      }
+
+      // Step 2.5: Check loss limits
+      const tradingAllowed = await lossLimitService.enforceLossLimits(userId);
+      if (!tradingAllowed) {
+        console.log('[TradingEngine] Loss limit reached - halting trading');
         return;
       }
 

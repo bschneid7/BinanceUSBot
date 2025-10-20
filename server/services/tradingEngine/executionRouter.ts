@@ -5,6 +5,8 @@ import Lot from '../../models/Lot';
 import BotConfig from '../../models/BotConfig';
 import { TradingSignal } from './signalGenerator';
 import riskEngine from './riskEngine';
+import makerFirstExecution from '../makerFirstExecution';
+import exchangeInfoCache from '../exchangeInfoCache';
 
 export interface OrderResult {
   success: boolean;
@@ -42,6 +44,22 @@ export class ExecutionRouter {
       // Determine order type (LIMIT vs MARKET)
       let orderType: 'LIMIT' | 'MARKET' = 'LIMIT';
       let price = signal.entryPrice;
+      let makerFirstResult: any = null;
+
+      // Apply maker-first execution if enabled (adjust price to maker side)
+      if (makerFirstExecution.isEnabled() && orderType === 'LIMIT') {
+        try {
+          makerFirstResult = await makerFirstExecution.adjustPriceToMaker(
+            signal.symbol,
+            signal.action,
+            signal.entryPrice
+          );
+          price = makerFirstResult.adjustedPrice;
+          console.log(`[ExecutionRouter] Maker-first adjusted price: ${signal.entryPrice.toFixed(8)} -> ${price.toFixed(8)} (${makerFirstResult.adjustmentBps.toFixed(2)}bps)`);
+        } catch (error) {
+          console.warn('[ExecutionRouter] Maker-first adjustment failed, using original price:', error);
+        }
+      }
 
       // For normal conditions, prefer POST-ONLY limit orders (maker)
       // For events or if price has moved significantly, use market orders
