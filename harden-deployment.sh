@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Exit on error and undefined variables
+set -u
+
 set -euo pipefail
 
 echo "=== BinanceUSBot Deployment Hardening ==="

@@ -3,6 +3,10 @@
 # BinanceUSBot VPS Deployment Script
 # This script deploys the bot to a VPS without Docker
 
+
+# Exit on error and undefined variables
+set -u
+
 set -e
 
 echo "🚀 BinanceUSBot VPS Deployment Script"

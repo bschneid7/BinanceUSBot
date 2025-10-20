@@ -11,6 +11,10 @@
 #        sudo bash setup-server.sh
 ###############################################################################
 
+
+# Exit on error and undefined variables
+set -u
+
 set -e  # Exit on error
 
 echo "============================================"

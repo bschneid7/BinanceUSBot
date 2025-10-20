@@ -14,6 +14,10 @@
 #   --logs       Show logs after deployment
 ###############################################################################
 
+
+# Exit on error and undefined variables
+set -u
+
 set -e  # Exit on error
 
 # Colors for output

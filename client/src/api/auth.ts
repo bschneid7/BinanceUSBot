@@ -1,4 +1,5 @@
 import api from './api';
+import logger from '../utils/logger';
 
 // Description: Login user functionality
 // Endpoint: POST /api/auth/login
@@ -9,7 +10,7 @@ export const login = async (email: string, password: string) => {
     const response = await api.post('/api/auth/login', { email, password });
     return response.data;
   } catch (error) {
-    console.error('Login error:', error);
+    logger.apiError('login', error);
     throw new Error(error?.response?.data?.message || error.message);
   }
 };

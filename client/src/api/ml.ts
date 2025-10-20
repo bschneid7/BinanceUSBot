@@ -1,4 +1,5 @@
 import api from './api';
+import logger from '../utils/logger';
 
 // Description: Get all ML models for user
 // Endpoint: GET /api/ml/models
@@ -18,7 +19,7 @@ export const getMLModels = async (filters?: {
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Get models error:', err);
+    logger.apiError('Get models error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Failed to get models');
   }
 };
@@ -33,7 +34,7 @@ export const getDeployedModel = async () => {
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Get deployed model error:', err);
+    logger.apiError('Get deployed model error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Failed to get deployed model');
   }
 };
@@ -48,7 +49,7 @@ export const getMLModelById = async (id: string) => {
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Get model by ID error:', err);
+    logger.apiError('Get model by ID error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Failed to get model');
   }
 };
@@ -63,7 +64,7 @@ export const deployMLModel = async (id: string) => {
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Deploy model error:', err);
+    logger.apiError('Deploy model error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Failed to deploy model');
   }
 };
@@ -78,7 +79,7 @@ export const archiveMLModel = async (id: string) => {
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Archive model error:', err);
+    logger.apiError('Archive model error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Failed to archive model');
   }
 };
@@ -102,7 +103,7 @@ export const updateModelBacktest = async (
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Update backtest error:', err);
+    logger.apiError('Update backtest error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Failed to update backtest');
   }
 };
@@ -117,7 +118,7 @@ export const getMLStats = async () => {
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Get stats error:', err);
+    logger.apiError('Get stats error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Failed to get stats');
   }
 };
@@ -132,7 +133,7 @@ export const updateLivePerformance = async () => {
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
-    console.error('[ML API] Update live performance error:', err);
+    logger.apiError('Update live performance error', err);
     throw new Error(
       err?.response?.data?.error || err.message || 'Failed to update live performance'
     );

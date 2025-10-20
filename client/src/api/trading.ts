@@ -1,5 +1,6 @@
 import api from './api';
 import { BotStatus, Position, Trade, Signal, Alert, PerformanceMetrics, BotConfig, TaxReport } from '@/types/trading';
+import logger from '../utils/logger';
 
 // Description: Get bot status and overview
 // Endpoint: GET /api/bot/status
@@ -10,7 +11,7 @@ export const getBotStatus = async (): Promise<BotStatus> => {
     const response = await api.get('/bot/status');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch bot status');
   }
@@ -25,7 +26,7 @@ export const getActivePositions = async (): Promise<{ positions: Position[] }> =
     const response = await api.get('/positions/active');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch active positions');
   }
@@ -46,7 +47,7 @@ export const getTradeHistory = async (filters?: {
     const response = await api.get('/trades/history', { params: filters });
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch trade history');
   }
@@ -61,7 +62,7 @@ export const getRecentSignals = async (limit: number = 10): Promise<{ signals: S
     const response = await api.get('/signals/recent', { params: { limit } });
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch recent signals');
   }
@@ -76,7 +77,7 @@ export const getAlerts = async (limit: number = 20): Promise<{ alerts: Alert[] }
     const response = await api.get('/alerts', { params: { limit } });
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch alerts');
   }
@@ -91,7 +92,7 @@ export const getPerformanceMetrics = async (): Promise<{ metrics: PerformanceMet
     const response = await api.get('/analytics/performance');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch performance metrics');
   }
@@ -106,7 +107,7 @@ export const getBotConfig = async (): Promise<{ config: BotConfig }> => {
     const response = await api.get('/config');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch bot configuration');
   }
@@ -121,7 +122,7 @@ export const updateBotConfig = async (config: Partial<BotConfig>): Promise<{ suc
     const response = await api.put('/config', config);
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
     throw new Error(err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to update bot configuration');
   }
@@ -136,7 +137,7 @@ export const emergencyStop = async (): Promise<{ success: boolean; message: stri
     const response = await api.post('/bot/emergency-stop');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
     throw new Error(err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to execute emergency stop');
   }
@@ -151,7 +152,7 @@ export const resumeTrading = async (justification?: string): Promise<{ success: 
     const response = await api.post('/bot/resume', { justification });
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
     throw new Error(err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to resume trading');
   }
@@ -166,7 +167,7 @@ export const getTaxReports = async (filters?: { year?: number; status?: string }
     const response = await api.get('/tax/reports', { params: filters });
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch tax reports');
   }
@@ -181,7 +182,7 @@ export const getEquityCurve = async (days: number = 30): Promise<{ data: Array<{
     const response = await api.get('/analytics/equity-curve', { params: { days } });
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch equity curve');
   }
@@ -196,7 +197,7 @@ export const startEngine = async (): Promise<{ success: boolean; message: string
     const response = await api.post('/engine/start');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to start engine');
   }
@@ -211,7 +212,7 @@ export const stopEngine = async (): Promise<{ success: boolean; message: string;
     const response = await api.post('/engine/stop');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to stop engine');
   }
@@ -226,7 +227,7 @@ export const getEngineStatus = async (): Promise<{ isRunning: boolean; lastScanT
     const response = await api.get('/engine/status');
     return response.data;
   } catch (error: unknown) {
-    console.error(error);
+    logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to get engine status');
   }

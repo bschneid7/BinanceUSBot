@@ -1,4 +1,5 @@
 import api from './api';
+import logger from '../utils/logger';
 
 // Description: Train PPO agent (starts background job)
 // Endpoint: POST /api/ppo/train
@@ -13,7 +14,7 @@ export const trainPPO = async (data: {
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
-    console.error('[PPO API] Training error:', err);
+    logger.apiError('Training error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Training failed');
   }
 };
@@ -28,7 +29,7 @@ export const getTrainingStatus = async () => {
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
-    console.error('[PPO API] Training status error:', err);
+    logger.apiError('Training status error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Get training status failed');
   }
 };
@@ -43,7 +44,7 @@ export const getPPOAction = async (state: number[]) => {
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
-    console.error('[PPO API] Action error:', err);
+    logger.apiError('Action error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Get action failed');
   }
 };
@@ -58,7 +59,7 @@ export const getPPOStats = async () => {
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
-    console.error('[PPO API] Stats error:', err);
+    logger.apiError('Stats error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Get stats failed');
   }
 };
@@ -73,7 +74,7 @@ export const resetPPO = async () => {
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
-    console.error('[PPO API] Reset error:', err);
+    logger.apiError('Reset error', err);
     throw new Error(err?.response?.data?.error || err.message || 'Reset failed');
   }
 };
