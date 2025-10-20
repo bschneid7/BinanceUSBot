@@ -179,7 +179,7 @@ export class TradingEngine {
       // Step 1: Update PnL tracking and recalculate R
       await riskEngine.updatePnLTracking(userId);
       await this.recalculateEquity(userId);
-      await reserveManager.updateReserves(userId);
+      // Note: Reserve levels are checked when placing orders via reserveManager.checkAvailableCapital()
 
       // Step 2: Check kill-switch
       const killSwitchResult = await riskEngine.checkKillSwitch(userId);
