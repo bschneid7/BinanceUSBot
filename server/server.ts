@@ -19,6 +19,8 @@ import mlRoutes from './routes/mlRoutes';
 import mlMetricsRoutes from './routes/mlMetricsRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
+import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
+import logger from './utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -41,6 +43,16 @@ app.set('etag', false);
 app.use(cors({}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// HTTP request metrics middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    recordHttpRequest(req.route?.path || req.path, req.method, res.statusCode, duration);
+  });
+  next();
+});
 
 // Disable caching for API routes
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
@@ -86,6 +98,22 @@ app.use('/api/ppo', ppoRoutes);
 app.use('/api/ml', mlRoutes);
 // ML Metrics Routes
 app.use('/api/ml-metrics', mlMetricsRoutes);
+
+// Prometheus Metrics Endpoint
+app.get('/metrics', async (req: Request, res: Response) => {
+  try {
+    res.set('Content-Type', metricsRegister.contentType);
+    res.end(await metricsRegister.metrics());
+  } catch (error) {
+    logger.error({ error }, 'Error generating metrics');
+    res.status(500).send('Error generating metrics');
+  }
+});
+
+// Health check endpoint
+app.get('/healthz', (req: Request, res: Response) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Serve static files from React app in production
 // Use dynamic path based on environment
