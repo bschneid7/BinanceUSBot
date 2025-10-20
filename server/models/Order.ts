@@ -23,6 +23,18 @@ export interface IOrder extends Document {
     responsePayload?: unknown;
     errorMessage?: string;
   };
+  tradeIds?: string[];
+  commissions?: Array<{
+    asset: string;
+    amount: number;
+  }>;
+  fills?: Array<{
+    price: number;
+    qty: number;
+    commission: number;
+    commissionAsset: string;
+    tradeId: number;
+  }>;
 }
 
 const schema = new Schema<IOrder>({
@@ -104,6 +116,24 @@ const schema = new Schema<IOrder>({
   },
   evidence: {
     type: Schema.Types.Mixed,
+  },
+  tradeIds: {
+    type: [String],
+  },
+  commissions: {
+    type: [{
+      asset: { type: String },
+      amount: { type: Number },
+    }],
+  },
+  fills: {
+    type: [{
+      price: { type: Number },
+      qty: { type: Number },
+      commission: { type: Number },
+      commissionAsset: { type: String },
+      tradeId: { type: Number },
+    }],
   },
 }, {
   timestamps: true,

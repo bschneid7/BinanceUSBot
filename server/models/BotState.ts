@@ -5,6 +5,7 @@ export interface IBotState extends Document {
   isRunning: boolean;
   lastScanTimestamp?: Date;
   lastSignalTimestamp?: Date;
+  startingEquity: number;
   equity: number;
   currentR: number;
   dailyPnl: number;
@@ -43,6 +44,11 @@ const schema = new Schema<IBotState>({
   },
   lastSignalTimestamp: {
     type: Date,
+  },
+  startingEquity: {
+    type: Number,
+    required: true,
+    default: 7000,
   },
   equity: {
     type: Number,
