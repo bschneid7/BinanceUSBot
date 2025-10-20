@@ -39,30 +39,60 @@ export class SignalGenerator {
       const qualifiedMarkets = marketDataArray.filter(m => m.passesGates);
       console.log(`[SignalGenerator] ${qualifiedMarkets.length} markets passed quality gates`);
 
-      // Run each playbook
+      // Run each playbook with individual error handling
       for (const market of qualifiedMarkets) {
+        // Validate market data
+        if (!market?.symbol || !market?.price || market.price <= 0) {
+          console.warn('[SignalGenerator] Invalid market data:', market);
+          continue;
+        }
+
         // Playbook A: Breakout Trend
-        if (config.playbook_A.enable) {
-          const signalA = await this.checkPlaybookA(userId, market, config);
-          if (signalA) signals.push(signalA);
+        if (config.playbook_A?.enable) {
+          try {
+            const signalA = await this.checkPlaybookA(userId, market, config);
+            if (signalA && this.validateSignal(signalA)) {
+              signals.push(signalA);
+            }
+          } catch (error) {
+            console.error(`[SignalGenerator] Playbook A failed for ${market.symbol}:`, error);
+          }
         }
 
         // Playbook B: VWAP Mean-Revert
-        if (config.playbook_B.enable) {
-          const signalB = await this.checkPlaybookB(userId, market, config);
-          if (signalB) signals.push(signalB);
+        if (config.playbook_B?.enable) {
+          try {
+            const signalB = await this.checkPlaybookB(userId, market, config);
+            if (signalB && this.validateSignal(signalB)) {
+              signals.push(signalB);
+            }
+          } catch (error) {
+            console.error(`[SignalGenerator] Playbook B failed for ${market.symbol}:`, error);
+          }
         }
 
         // Playbook C: Event Burst
-        if (config.playbook_C.enable) {
-          const signalC = await this.checkPlaybookC(userId, market, config);
-          if (signalC) signals.push(signalC);
+        if (config.playbook_C?.enable) {
+          try {
+            const signalC = await this.checkPlaybookC(userId, market, config);
+            if (signalC && this.validateSignal(signalC)) {
+              signals.push(signalC);
+            }
+          } catch (error) {
+            console.error(`[SignalGenerator] Playbook C failed for ${market.symbol}:`, error);
+          }
         }
 
         // Playbook D: Dip Pullback
-        if (config.playbook_D.enable) {
-          const signalD = await this.checkPlaybookD(userId, market, config);
-          if (signalD) signals.push(signalD);
+        if (config.playbook_D?.enable) {
+          try {
+            const signalD = await this.checkPlaybookD(userId, market, config);
+            if (signalD && this.validateSignal(signalD)) {
+              signals.push(signalD);
+            }
+          } catch (error) {
+            console.error(`[SignalGenerator] Playbook D failed for ${market.symbol}:`, error);
+          }
         }
       }
 
@@ -392,7 +422,7 @@ export class SignalGenerator {
     signal: TradingSignal,
     action: 'EXECUTED' | 'SKIPPED',
     reason?: string
-  ): Promise<void> {
+    ): Promise<void> {
     try {
       await Signal.create({
         userId,
@@ -403,12 +433,69 @@ export class SignalGenerator {
         entry_price: action === 'EXECUTED' ? signal.entryPrice : undefined,
         timestamp: new Date(),
       });
-
       console.log(`[SignalGenerator] Recorded signal: ${signal.symbol} ${signal.playbook} - ${action}`);
     } catch (error) {
       console.error('[SignalGenerator] Error recording signal:', error);
     }
   }
-}
 
+  /**
+   * Validate signal data before execution
+   */
+  private validateSignal(signal: TradingSignal): boolean {
+    // Check required fields
+    if (!signal?.symbol || !signal?.playbook || !signal?.action) {
+      console.warn('[SignalGenerator] Signal missing required fields:', signal);
+      return false;
+    }
+
+    // Validate prices
+    if (!signal.entryPrice || signal.entryPrice <= 0) {
+      console.warn(`[SignalGenerator] Invalid entry price for ${signal.symbol}:`, signal.entryPrice);
+      return false;
+    }
+
+    if (!signal.stopPrice || signal.stopPrice <= 0) {
+      console.warn(`[SignalGenerator] Invalid stop price for ${signal.symbol}:`, signal.stopPrice);
+      return false;
+    }
+
+    // Validate stop is reasonable (not same as entry)
+    if (signal.entryPrice === signal.stopPrice) {
+      console.warn(`[SignalGenerator] Stop price equals entry price for ${signal.symbol}`);
+      return false;
+    }
+
+    // Validate target if provided
+    if (signal.targetPrice !== undefined) {
+      if (signal.targetPrice <= 0) {
+        console.warn(`[SignalGenerator] Invalid target price for ${signal.symbol}:`, signal.targetPrice);
+        return false;
+      }
+
+      // For LONG: target should be > entry > stop
+      if (signal.action === 'BUY') {
+        if (signal.targetPrice <= signal.entryPrice || signal.stopPrice >= signal.entryPrice) {
+          console.warn(`[SignalGenerator] Invalid price relationship for LONG ${signal.symbol}: target=${signal.targetPrice}, entry=${signal.entryPrice}, stop=${signal.stopPrice}`);
+          return false;
+        }
+      }
+      // For SHORT: stop should be > entry > target
+      else if (signal.action === 'SELL') {
+        if (signal.targetPrice >= signal.entryPrice || signal.stopPrice <= signal.entryPrice) {
+          console.warn(`[SignalGenerator] Invalid price relationship for SHORT ${signal.symbol}: stop=${signal.stopPrice}, entry=${signal.entryPrice}, target=${signal.targetPrice}`);
+          return false;
+        }
+      }
+    }
+
+    // Validate quantity if provided
+    if (signal.quantity !== undefined && signal.quantity <= 0) {
+      console.warn(`[SignalGenerator] Invalid quantity for ${signal.symbol}:`, signal.quantity);
+      return false;
+    }
+
+    return true;
+  }
+}
 export default new SignalGenerator();

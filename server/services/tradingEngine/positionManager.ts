@@ -5,6 +5,7 @@ import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import binanceService from '../binanceService';
 import executionRouter from './executionRouter';
+import { RISK_LIMITS } from './constants';
 
 export class PositionManager {
   /**
@@ -65,8 +66,11 @@ export class PositionManager {
 
       // Calculate unrealized R
       const state = await BotState.findOne({ userId: position.userId });
-      const currentR = state?.currentR || 42;
-      const unrealizedR = currentR > 0 ? unrealizedPnl / currentR : 0;
+      if (!state || !state.currentR || state.currentR <= 0) {
+        console.warn(`[PositionManager] Invalid currentR for position ${positionId}`);
+        return;
+      }
+      const unrealizedR = unrealizedPnl / state.currentR;
 
       // Calculate hold time
       const holdTimeMs = Date.now() - position.opened_at.getTime();
@@ -387,17 +391,55 @@ export class PositionManager {
   async updateAllPositions(userId: Types.ObjectId): Promise<void> {
     try {
       const openPositions = await Position.find({ userId, status: 'OPEN' });
+      
+      if (!openPositions || openPositions.length === 0) {
+        return;
+      }
 
-      for (const position of openPositions) {
+      console.log(`[PositionManager] Updating ${openPositions.length} open positions`);
+
+      // Fetch all tickers in parallel for better performance
+      const tickerPromises = openPositions.map(position =>
+        binanceService.getTicker(position.symbol)
+          .then(ticker => ({ position, ticker, success: true }))
+          .catch(error => {
+            console.error(`[PositionManager] Failed to fetch ticker for ${position.symbol}:`, error);
+            return { position, ticker: null, success: false };
+          })
+      );
+
+      const tickerResults = await Promise.all(tickerPromises);
+
+      // Update positions in parallel
+      const updatePromises = tickerResults.map(async ({ position, ticker, success }) => {
+        if (!success || !ticker) {
+          return;
+        }
+
         try {
-          const ticker = await binanceService.getTicker(position.symbol);
+          // Validate ticker data
+          if (!ticker.lastPrice || isNaN(parseFloat(ticker.lastPrice))) {
+            console.warn(`[PositionManager] Invalid price data for ${position.symbol}:`, ticker.lastPrice);
+            return;
+          }
+
           const currentPrice = parseFloat(ticker.lastPrice);
+          
+          // Sanity check on price
+          if (currentPrice <= 0 || currentPrice > 1000000) {
+            console.warn(`[PositionManager] Unreasonable price for ${position.symbol}: $${currentPrice}`);
+            return;
+          }
+
           await this.updatePosition(position._id, currentPrice);
           await this.managePosition(position._id);
         } catch (error) {
           console.error(`[PositionManager] Error updating position ${position._id}:`, error);
         }
-      }
+      });
+
+      await Promise.all(updatePromises);
+      console.log(`[PositionManager] Position updates complete`);
     } catch (error) {
       console.error('[PositionManager] Error updating all positions:', error);
     }

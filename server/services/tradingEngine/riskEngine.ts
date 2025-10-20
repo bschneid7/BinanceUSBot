@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import { Types } from 'mongoose';
 import Position from '../../models/Position';
 import BotConfig from '../../models/BotConfig';
@@ -35,7 +36,7 @@ export class RiskEngine {
     proposedNotional: number
   ): Promise<RiskCheckResult> {
     try {
-      console.log(`[RiskEngine] Checking risk limits for ${symbol} - Risk: ${proposedRiskR}R, Notional: $${proposedNotional}`);
+      logger.info(`[RiskEngine] Checking risk limits for ${symbol} - Risk: ${proposedRiskR}R, Notional: $${proposedNotional}`);
 
       const config = await BotConfig.findOne({ userId });
       if (!config) {
@@ -49,64 +50,64 @@ export class RiskEngine {
 
       // Get open positions
       const openPositions = await Position.find({ userId, status: 'OPEN' });
-      console.log(`[RiskEngine] Found ${openPositions.length} open positions`);
+      logger.info(`[RiskEngine] Found ${openPositions.length} open positions`);
 
       // Calculate current open risk
       let currentOpenRiskR = 0;
       let currentExposure = 0;
 
-      openPositions.forEach(position => {
+      openPositions?.forEach(position => {
         // Calculate risk in R for each position
-        const riskAmount = Math.abs(position.entry_price - position.stop_price) * position.quantity;
+        const riskAmount = Math.abs(position?.entry_price - position.stop_price) * position?.quantity;
         const riskR = state.currentR > 0 ? riskAmount / state.currentR : 0;
         currentOpenRiskR += riskR;
 
         // Calculate exposure
-        const notional = (position.current_price || position.entry_price) * position.quantity;
+        const notional = (position?.current_price || position?.entry_price) * position?.quantity;
         currentExposure += notional;
       });
 
-      console.log(`[RiskEngine] Current open risk: ${currentOpenRiskR.toFixed(2)}R, Current exposure: $${currentExposure.toFixed(2)}`);
+      logger.info(`[RiskEngine] Current open risk: ${currentOpenRiskR.toFixed(2)}R, Current exposure: $${currentExposure.toFixed(2)}`);
 
       // Check 1: Max open risk
       const totalOpenRiskR = currentOpenRiskR + proposedRiskR;
-      if (totalOpenRiskR > config.risk.max_open_R) {
-        console.log(`[RiskEngine] REJECTED: Total open risk ${totalOpenRiskR.toFixed(2)}R exceeds max ${config.risk.max_open_R}R`);
+      if (totalOpenRiskR > config?.risk?.max_open_R) {
+        logger.info(`[RiskEngine] REJECTED: Total open risk ${totalOpenRiskR.toFixed(2)}R exceeds max ${config?.risk?.max_open_R}R`);
         return {
           approved: false,
-          reason: `Total open risk ${totalOpenRiskR.toFixed(2)}R exceeds maximum ${config.risk.max_open_R}R`,
+          reason: `Total open risk ${totalOpenRiskR.toFixed(2)}R exceeds maximum ${config?.risk?.max_open_R}R`,
         };
       }
 
       // Check 2: Max positions
-      if (openPositions.length >= config.risk.max_positions) {
-        console.log(`[RiskEngine] REJECTED: Max positions (${config.risk.max_positions}) reached`);
+      if (openPositions.length >= config?.risk?.max_positions) {
+        logger.info(`[RiskEngine] REJECTED: Max positions (${config?.risk?.max_positions}) reached`);
         return {
           approved: false,
-          reason: `Maximum ${config.risk.max_positions} positions already open`,
+          reason: `Maximum ${config?.risk?.max_positions} positions already open`,
         };
       }
 
       // Check 3: Max exposure
       const totalExposure = currentExposure + proposedNotional;
-      const maxExposure = state.equity * config.risk.max_exposure_pct;
+      const maxExposure = state.equity * config?.risk?.max_exposure_pct;
       if (totalExposure > maxExposure) {
-        console.log(`[RiskEngine] REJECTED: Total exposure $${totalExposure.toFixed(2)} exceeds max $${maxExposure.toFixed(2)}`);
+        logger.info(`[RiskEngine] REJECTED: Total exposure $${totalExposure.toFixed(2)} exceeds max $${maxExposure.toFixed(2)}`);
         return {
           approved: false,
-          reason: `Total exposure $${totalExposure.toFixed(2)} exceeds maximum ${(config.risk.max_exposure_pct * 100).toFixed(0)}% of equity`,
+          reason: `Total exposure $${totalExposure.toFixed(2)} exceeds maximum ${(config?.risk?.max_exposure_pct * 100).toFixed(0)}% of equity`,
         };
       }
 
       // Check 4: Correlation guard
-      if (config.risk.correlation_guard && symbol !== 'BTCUSDT') {
+      if (config?.risk?.correlation_guard && symbol !== 'BTCUSDT') {
         const btcPosition = openPositions.find(p => p.symbol === 'BTCUSDT');
         if (btcPosition) {
           const btcRiskAmount = Math.abs(btcPosition.entry_price - btcPosition.stop_price) * btcPosition.quantity;
           const btcRiskR = state.currentR > 0 ? btcRiskAmount / state.currentR : 0;
 
           if (btcRiskR >= 1.0) {
-            console.log(`[RiskEngine] WARNING: BTC risk is ${btcRiskR.toFixed(2)}R - scaling down correlated alt`);
+            logger.info(`[RiskEngine] WARNING: BTC risk is ${btcRiskR.toFixed(2)}R - scaling down correlated alt`);
             // Scale down proposed position by 50%
             return {
               approved: true,
@@ -117,10 +118,10 @@ export class RiskEngine {
         }
       }
 
-      console.log(`[RiskEngine] APPROVED: All risk checks passed`);
+      logger.info(`[RiskEngine] APPROVED: All risk checks passed`);
       return { approved: true };
     } catch (error) {
-      console.error('[RiskEngine] Error checking risk limits:', error);
+      logger.error('[RiskEngine] Error checking risk limits:', error);
       return {
         approved: false,
         reason: error instanceof Error ? error.message : 'Unknown error',
@@ -148,7 +149,7 @@ export class RiskEngine {
       : config.slippage_guard_bps;
 
     if (slippageBps > maxSlippage) {
-      console.log(`[RiskEngine] Slippage ${slippageBps.toFixed(2)} bps exceeds limit ${maxSlippage} bps`);
+      logger.info(`[RiskEngine] Slippage ${slippageBps.toFixed(2)} bps exceeds limit ${maxSlippage} bps`);
       return {
         approved: false,
         reason: `Slippage ${slippageBps.toFixed(2)} bps exceeds limit ${maxSlippage} bps`,
@@ -173,7 +174,7 @@ export class RiskEngine {
       // Check if we need to reset daily counters
       const currentSessionStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       if (state.sessionStartDate < currentSessionStart) {
-        console.log('[RiskEngine] New trading day detected - resetting daily PnL and Playbook B counters');
+        logger.info('[RiskEngine] New trading day detected - resetting daily PnL and Playbook B counters');
         state.dailyPnl = 0;
         state.dailyPnlR = 0;
         state.sessionStartDate = currentSessionStart;
@@ -189,7 +190,7 @@ export class RiskEngine {
       currentWeekStart.setHours(0, 0, 0, 0);
 
       if (state.weekStartDate < currentWeekStart) {
-        console.log('[RiskEngine] New trading week detected - resetting weekly PnL');
+        logger.info('[RiskEngine] New trading week detected - resetting weekly PnL');
         state.weeklyPnl = 0;
         state.weeklyPnlR = 0;
         state.weekStartDate = currentWeekStart;
@@ -197,7 +198,7 @@ export class RiskEngine {
 
       await state.save();
     } catch (error) {
-      console.error('[RiskEngine] Error updating PnL tracking:', error);
+      logger.error('[RiskEngine] Error updating PnL tracking:', error);
       throw error;
     }
   }
@@ -219,8 +220,8 @@ export class RiskEngine {
       }
 
       // Check daily loss limit
-      if (state.dailyPnlR <= config.risk.daily_stop_R) {
-        console.log(`[RiskEngine] KILL-SWITCH TRIGGERED: Daily loss ${state.dailyPnlR.toFixed(2)}R <= ${config.risk.daily_stop_R}R`);
+      if (state.dailyPnlR <= config?.risk?.daily_stop_R) {
+        logger.info(`[RiskEngine] KILL-SWITCH TRIGGERED: Daily loss ${state.dailyPnlR.toFixed(2)}R <= ${config?.risk?.daily_stop_R}R`);
         return {
           shouldHalt: true,
           haltType: 'DAILY',
@@ -229,8 +230,8 @@ export class RiskEngine {
       }
 
       // Check weekly loss limit
-      if (state.weeklyPnlR <= config.risk.weekly_stop_R) {
-        console.log(`[RiskEngine] KILL-SWITCH TRIGGERED: Weekly loss ${state.weeklyPnlR.toFixed(2)}R <= ${config.risk.weekly_stop_R}R`);
+      if (state.weeklyPnlR <= config?.risk?.weekly_stop_R) {
+        logger.info(`[RiskEngine] KILL-SWITCH TRIGGERED: Weekly loss ${state.weeklyPnlR.toFixed(2)}R <= ${config?.risk?.weekly_stop_R}R`);
         return {
           shouldHalt: true,
           haltType: 'WEEKLY',
@@ -240,7 +241,7 @@ export class RiskEngine {
 
       return { shouldHalt: false };
     } catch (error) {
-      console.error('[RiskEngine] Error checking kill-switch:', error);
+      logger.error('[RiskEngine] Error checking kill-switch:', error);
       return { shouldHalt: false };
     }
   }

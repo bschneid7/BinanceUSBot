@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import { Types } from 'mongoose';
 import binanceService from '../binanceService';
 import Order from '../../models/Order';
@@ -31,7 +32,7 @@ export class ExecutionRouter {
     positionId?: Types.ObjectId
   ): Promise<OrderResult> {
     try {
-      console.log(`[ExecutionRouter] Executing signal for ${signal.symbol} - ${signal.playbook} - ${signal.action} - Qty: ${quantity}`);
+      logger.info(`[ExecutionRouter] Executing signal for ${signal.symbol} - ${signal.playbook} - ${signal.action} - Qty: ${quantity}`);
 
       // Generate unique client order ID
       const clientOrderId = `${signal.symbol}-${signal.playbook}-${Date.now()}`;
@@ -56,24 +57,48 @@ export class ExecutionRouter {
             signal.entryPrice
           );
           price = makerFirstResult.adjustedPrice;
-          console.log(`[ExecutionRouter] Maker-first adjusted price: ${signal.entryPrice.toFixed(8)} -> ${price.toFixed(8)} (${makerFirstResult.adjustmentBps.toFixed(2)}bps)`);
+          logger.info(`[ExecutionRouter] Maker-first adjusted price: ${signal.entryPrice.toFixed(8)} -> ${price.toFixed(8)} (${makerFirstResult.adjustmentBps.toFixed(2)}bps)`);
         } catch (error) {
-          console.warn('[ExecutionRouter] Maker-first adjustment failed, using original price:', error);
+          logger.warn('[ExecutionRouter] Maker-first adjustment failed, using original price:', error);
         }
       }
 
+      // Validate signal prices
+      if (signal.entryPrice <= 0 || signal.stopPrice <= 0) {
+        logger.error(`[ExecutionRouter] Invalid signal prices: entry=${signal.entryPrice}, stop=${signal.stopPrice}`);
+        return { success: false, error: 'Invalid signal prices (must be > 0)' };
+      }
+      
+      if (signal.entryPrice > 1000000) {
+        logger.error(`[ExecutionRouter] Suspiciously high entry price: ${signal.entryPrice}`);
+        return { success: false, error: 'Entry price exceeds sanity check threshold' };
+      }
+      
       // Get current price for pre-trade checks
       const currentTicker = await binanceService.getTicker(signal.symbol);
       const currentPrice = parseFloat(currentTicker.lastPrice);
+      
+      // Sanity check: signal price shouldn't be more than 50% away from current price
+      const priceDiff = Math.abs(currentPrice - signal.entryPrice) / currentPrice;
+      if (priceDiff > 0.5) {
+        logger.error(`[ExecutionRouter] Signal price ${signal.entryPrice} is ${(priceDiff*100).toFixed(1)}% away from current price ${currentPrice}`);
+        return { success: false, error: 'Signal price too far from current market price (>50%)' };
+      }
+      
       const priceChange = Math.abs(currentPrice - signal.entryPrice);
       const preTradeSlippageBps = (priceChange / signal.entryPrice) * 10000;
 
-      console.log(`[ExecutionRouter] Pre-trade check: Signal price $${signal.entryPrice.toFixed(2)}, Current $${currentPrice.toFixed(2)}, Slippage ${preTradeSlippageBps.toFixed(2)}bps`);
+      logger.info(`[ExecutionRouter] Pre-trade check: Signal price $${signal.entryPrice.toFixed(2)}, Current $${currentPrice.toFixed(2)}, Slippage ${preTradeSlippageBps.toFixed(2)}bps`);
 
       // Calculate proposed risk and notional
       const proposedNotional = quantity * price;
       const riskPerUnit = Math.abs(signal.entryPrice - signal.stopPrice);
-      const proposedRiskR = riskPerUnit * quantity / (config.risk.R_pct * 7000); // Approximate R
+      
+      // Get current equity for R calculation
+      const state = await BotState.findOne({ userId });
+      const currentEquity = (state?.currentEquity || state?.startingEquity) ?? 10000; // Fallback to reasonable default
+      const rDollarValue = currentEquity * (config?.risk?.R_pct / 100);
+      const proposedRiskR = (riskPerUnit * quantity) / rDollarValue;
 
       // Run comprehensive pre-trade gates
       const gateCheck = await policyGuardrails.checkAllPreTradeGates({
@@ -90,7 +115,7 @@ export class ExecutionRouter {
       });
 
       if (!gateCheck.approved) {
-        console.warn(`[ExecutionRouter] Pre-trade gate failed: ${gateCheck.reason}`);
+        logger.warn(`[ExecutionRouter] Pre-trade gate failed: ${gateCheck.reason}`);
         return {
           success: false,
           error: `Pre-trade gate failed (${gateCheck.gate}): ${gateCheck.reason}`,
@@ -103,7 +128,7 @@ export class ExecutionRouter {
         const changePercent = (priceChange / signal.entryPrice) * 100;
 
         if (changePercent > 0.2) {
-          console.log(`[ExecutionRouter] Signal decayed ${changePercent.toFixed(2)}% - using MARKET order`);
+          logger.info(`[ExecutionRouter] Signal decayed ${changePercent.toFixed(2)}% - using MARKET order`);
           orderType = 'MARKET';
           price = currentPrice;
         }
@@ -124,7 +149,7 @@ export class ExecutionRouter {
       );
 
       if (!orderResult.success) {
-        console.error(`[ExecutionRouter] Order failed: ${orderResult.error}`);
+        logger.error(`[ExecutionRouter] Order failed: ${orderResult.error}`);
         return orderResult;
       }
 
@@ -142,10 +167,10 @@ export class ExecutionRouter {
         );
 
         if (!slippageCheck.approved) {
-          console.warn(`[ExecutionRouter] WARNING: ${slippageCheck.reason}`);
+          logger.warn(`[ExecutionRouter] WARNING: ${slippageCheck.reason}`);
         }
 
-        console.log(`[ExecutionRouter] Order filled at $${orderResult.fillPrice.toFixed(2)} - Slippage: ${slippageBps.toFixed(2)} bps`);
+        logger.info(`[ExecutionRouter] Order filled at $${orderResult.fillPrice.toFixed(2)} - Slippage: ${slippageBps.toFixed(2)} bps`);
       }
 
       // Create tax lot for BUY orders
@@ -155,14 +180,14 @@ export class ExecutionRouter {
           signal.symbol,
           orderResult.filledQuantity || quantity,
           orderResult.fillPrice || price,
-          orderResult.fees || 0,
+          orderResult.fees ?? 0,
           orderResult.orderId
         );
       }
 
       return orderResult;
     } catch (error) {
-      console.error('[ExecutionRouter] Error executing signal:', error);
+      logger.error('[ExecutionRouter] Error executing signal:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -203,23 +228,23 @@ export class ExecutionRouter {
         submittedAt: new Date(),
       });
 
-      console.log(`[ExecutionRouter] Created order record: ${order._id}`);
+      logger.info(`[ExecutionRouter] Created order record: ${order._id as any}`);
 
       // Check if Binance API is configured
       if (!binanceService.isConfigured()) {
-        console.warn('[ExecutionRouter] Binance API not configured - simulating order fill');
+        logger.warn('[ExecutionRouter] Binance API not configured - simulating order fill');
 
         // Simulate order fill for testing
-        order.status = 'FILLED';
+        if (order) order.status = 'FILLED';
         order.filledQuantity = params.quantity;
-        order.fillPrice = params.price || 0;
+        order.fillPrice = params.price ?? 0;
         order.filledAt = new Date();
-        order.fees = (params.price || 0) * params.quantity * 0.001; // 0.1% maker fee
+        order.fees = (params.price ?? 0) * params.quantity * 0.001; // 0.1% maker fee
         await order.save();
 
         return {
           success: true,
-          orderId: order._id,
+          orderId: order._id as any,
           fillPrice: order.fillPrice,
           filledQuantity: order.filledQuantity,
           fees: order.fees,
@@ -252,13 +277,13 @@ export class ExecutionRouter {
         'EXPIRED': 'CANCELLED',  // Treat expired as cancelled
       };
       
-      order.status = statusMap[binanceOrder.status] || 'OPEN';
+      if (order) order.status = statusMap[binanceOrder.status] || 'OPEN';
       order.filledQuantity = parseFloat(binanceOrder.executedQty);
       
       // Handle partial fills - keep order open for remaining quantity
-      if (order.status === 'PARTIALLY_FILLED') {
+      if (order?.status === 'PARTIALLY_FILLED') {
         const remainingQty = params.quantity - order.filledQuantity;
-        console.warn(`[ExecutionRouter] Order partially filled: ${order.filledQuantity}/${params.quantity} (${remainingQty} remaining)`);
+        logger.warn(`[ExecutionRouter] Order partially filled: ${order.filledQuantity}/${params.quantity} (${remainingQty} remaining)`);
         // Note: Order remains OPEN on exchange for the unfilled portion
         // Position manager will track this and update when fully filled or cancelled
       }
@@ -273,40 +298,58 @@ export class ExecutionRouter {
         let totalQty = 0;
         let totalFees = 0;
 
-        binanceOrder.fills.forEach(fill => {
-          const qty = parseFloat(fill.qty);
-          const price = parseFloat(fill.price);
-          const fee = parseFloat(fill.commission);
+        binanceOrder.fills?.forEach(fill => {
+          // Null-safe parsing with defaults
+          const qty = fill?.qty ? parseFloat(fill.qty) : 0;
+          const price = fill?.price ? parseFloat(fill.price) : 0;
+          const fee = fill?.commission ? parseFloat(fill.commission) : 0;
+          
+          // Validate parsed values
+          if (isNaN(qty) || isNaN(price) || isNaN(fee)) {
+            logger.warn('[ExecutionRouter] Invalid fill data:', fill);
+            return; // Skip this fill
+          }
 
           totalCost += qty * price;
           totalQty += qty;
           totalFees += fee;
         });
 
-        order.fillPrice = totalQty > 0 ? totalCost / totalQty : params.price;
-        order.fees = totalFees;
-        order.filledAt = new Date();
+        // Only update if we have valid data
+        if (totalQty > 0) {
+          order.fillPrice = totalCost / totalQty;
+          order.fees = totalFees;
+          order.filledAt = new Date();
+        } else {
+          logger.warn('[ExecutionRouter] No valid fills found, using order price');
+          order.fillPrice = params.price;
+          order.fees = 0;
+        }
+      } else {
+        // No fills data - use order price and zero fees
+        order.fillPrice = params.price;
+        order.fees = 0;
       }
 
       await order.save();
 
-      console.log(`[ExecutionRouter] Order placed on exchange: ${binanceOrder.orderId}`);
+      logger.info(`[ExecutionRouter] Order placed on exchange: ${binanceOrder.orderId}`);
 
       return {
         success: true,
-        orderId: order._id,
+        orderId: order._id as any,
         exchangeOrderId: order.exchangeOrderId,
         fillPrice: order.fillPrice,
         filledQuantity: order.filledQuantity,
         fees: order.fees,
       };
     } catch (error) {
-      console.error('[ExecutionRouter] Error placing order:', error);
+      logger.error('[ExecutionRouter] Error placing order:', error);
 
       // Update order record with error
       const order = await Order.findOne({ clientOrderId: params.clientOrderId });
       if (order) {
-        order.status = 'REJECTED';
+        if (order) order.status = 'REJECTED';
         order.evidence = {
           requestPayload: params,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
@@ -365,9 +408,9 @@ export class ExecutionRouter {
         },
       });
 
-      console.log(`[ExecutionRouter] Created tax lot: ${lotId} - ${quantity} ${symbol} @ $${costPerUnit.toFixed(2)}/unit`);
+      logger.info(`[ExecutionRouter] Created tax lot: ${lotId} - ${quantity} ${symbol} @ $${costPerUnit.toFixed(2)}/unit`);
     } catch (error) {
-      console.error('[ExecutionRouter] Error creating tax lot:', error);
+      logger.error('[ExecutionRouter] Error creating tax lot:', error);
     }
   }
 
@@ -381,8 +424,8 @@ export class ExecutionRouter {
         return { success: false, error: 'Order not found' };
       }
 
-      if (order.status !== 'OPEN') {
-        return { success: false, error: `Cannot cancel order with status ${order.status}` };
+      if (order?.status !== 'OPEN') {
+        return { success: false, error: `Cannot cancel order with status ${order?.status}` };
       }
 
       // Cancel on exchange if configured
@@ -390,13 +433,13 @@ export class ExecutionRouter {
         await binanceService.cancelOrder(order.symbol, parseInt(order.exchangeOrderId));
       }
 
-      order.status = 'CANCELLED';
+      if (order) order.status = 'CANCELLED';
       await order.save();
 
-      console.log(`[ExecutionRouter] Cancelled order: ${orderId}`);
+      logger.info(`[ExecutionRouter] Cancelled order: ${orderId}`);
       return { success: true };
     } catch (error) {
-      console.error('[ExecutionRouter] Error cancelling order:', error);
+      logger.error('[ExecutionRouter] Error cancelling order:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import { Types } from 'mongoose';
 import binanceService from '../binanceService';
 import BotConfig from '../../models/BotConfig';
@@ -22,7 +23,7 @@ export class MarketScanner {
    */
   async scanMarkets(userId: Types.ObjectId): Promise<MarketData[]> {
     try {
-      console.log('[MarketScanner] Starting market scan');
+      logger.info('[MarketScanner] Starting market scan');
 
       const config = await BotConfig.findOne({ userId });
       if (!config) {
@@ -34,17 +35,17 @@ export class MarketScanner {
         throw new Error('Bot state not found');
       }
 
-      const pairs = config.scanner.pairs;
-      console.log(`[MarketScanner] Scanning ${pairs.length} pairs: ${pairs.join(', ')}`);
+      const pairs = config?.scanner?.pairs;
+      logger.info(`[MarketScanner] Scanning ${pairs.length} pairs: ${pairs.join(', ')}`);
 
-      const marketDataPromises = pairs.map(symbol =>
+      const marketDataPromises = pairs?.map(symbol =>
         this.getMarketData(symbol, config)
       );
 
       const marketDataResults = await Promise.allSettled(marketDataPromises);
       const marketData: MarketData[] = [];
 
-      marketDataResults.forEach((result, index) => {
+      marketDataResults?.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           marketData.push(result.value);
           // Update state with latest market data
@@ -57,7 +58,7 @@ export class MarketScanner {
             lastUpdate: new Date(),
           });
         } else {
-          console.error(`[MarketScanner] Failed to fetch data for ${pairs[index]}:`, result.reason);
+          logger.error(`[MarketScanner] Failed to fetch data for ${pairs[index]}:`, result.reason);
         }
       });
 
@@ -65,10 +66,10 @@ export class MarketScanner {
       state.lastScanTimestamp = new Date();
       await state.save();
 
-      console.log(`[MarketScanner] Scan complete - ${marketData.length}/${pairs.length} pairs successful`);
+      logger.info(`[MarketScanner] Scan complete - ${marketData.length}/${pairs.length} pairs successful`);
       return marketData;
     } catch (error) {
-      console.error('[MarketScanner] Error during market scan:', error);
+      logger.error('[MarketScanner] Error during market scan:', error);
       throw error;
     }
   }
@@ -106,14 +107,14 @@ export class MarketScanner {
       let passesGates = true;
 
       // Gate 1: 24h volume
-      if (volume24h < config.scanner.min_volume_usd_24h) {
-        gateFailures.push(`Volume $${volume24h.toFixed(0)} < $${config.scanner.min_volume_usd_24h}`);
+      if (volume24h < config?.scanner?.min_volume_usd_24h) {
+        gateFailures.push(`Volume $${volume24h.toFixed(0)} < $${config?.scanner?.min_volume_usd_24h}`);
         passesGates = false;
       }
 
       // Gate 2: Spread
-      if (spreadBps > config.scanner.max_spread_bps) {
-        gateFailures.push(`Spread ${spreadBps.toFixed(2)} bps > ${config.scanner.max_spread_bps} bps`);
+      if (spreadBps > config?.scanner?.max_spread_bps) {
+        gateFailures.push(`Spread ${spreadBps.toFixed(2)} bps > ${config?.scanner?.max_spread_bps} bps`);
         passesGates = false;
       }
 
@@ -124,15 +125,15 @@ export class MarketScanner {
       const askDepthUsd = askQty * askPrice;
       const minDepth = Math.min(bidDepthUsd, askDepthUsd);
 
-      if (minDepth < config.scanner.tob_min_depth_usd) {
-        gateFailures.push(`TOB depth $${minDepth.toFixed(0)} < $${config.scanner.tob_min_depth_usd}`);
+      if (minDepth < config?.scanner?.tob_min_depth_usd) {
+        gateFailures.push(`TOB depth $${minDepth.toFixed(0)} < $${config?.scanner?.tob_min_depth_usd}`);
         passesGates = false;
       }
 
       if (passesGates) {
-        console.log(`[MarketScanner] ${symbol} - PASS (Price: $${price.toFixed(2)}, Vol: $${(volume24h / 1e6).toFixed(2)}M, Spread: ${spreadBps.toFixed(2)} bps, ATR: $${atr.toFixed(2)})`);
+        logger.info(`[MarketScanner] ${symbol} - PASS (Price: $${price.toFixed(2)}, Vol: $${(volume24h / 1e6).toFixed(2)}M, Spread: ${spreadBps.toFixed(2)} bps, ATR: $${atr.toFixed(2)})`);
       } else {
-        console.log(`[MarketScanner] ${symbol} - FAIL: ${gateFailures.join(', ')}`);
+        logger.info(`[MarketScanner] ${symbol} - FAIL: ${gateFailures.join(', ')}`);
       }
 
       return {
@@ -148,7 +149,7 @@ export class MarketScanner {
         gateFailures,
       };
     } catch (error) {
-      console.error(`[MarketScanner] Error fetching market data for ${symbol}:`, error);
+      logger.error(`[MarketScanner] Error fetching market data for ${symbol}:`, error);
       throw error;
     }
   }
@@ -185,7 +186,7 @@ export class MarketScanner {
 
       return { allowed: true };
     } catch (error) {
-      console.error('[MarketScanner] Error checking signal cooldown:', error);
+      logger.error('[MarketScanner] Error checking signal cooldown:', error);
       return { allowed: true }; // Fail open
     }
   }
@@ -203,7 +204,7 @@ export class MarketScanner {
       state.lastPairSignalTimes.set(symbol, new Date());
       await state.save();
     } catch (error) {
-      console.error('[MarketScanner] Error updating last signal time:', error);
+      logger.error('[MarketScanner] Error updating last signal time:', error);
     }
   }
 }

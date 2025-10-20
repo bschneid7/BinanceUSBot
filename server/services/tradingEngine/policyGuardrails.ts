@@ -3,6 +3,7 @@ import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import riskEngine from './riskEngine';
 import exchangeInfoCache from '../exchangeInfoCache';
+import { RISK_LIMITS, SLIPPAGE } from './constants';
 
 /**
  * Policy Guardrails Service
@@ -49,13 +50,18 @@ export class PolicyGuardrails {
     userId: Types.ObjectId,
     proposedRiskR: number
   ): PreTradeCheckResult {
+    // Validate input
+    if (!proposedRiskR || isNaN(proposedRiskR) || proposedRiskR <= 0) {
+      return { approved: false, reason: 'Invalid risk value', gate: 'r_clamp' };
+    }
+
     try {
       const config = await BotConfig.findOne({ userId });
       if (!config) {
         return { approved: false, reason: 'Bot configuration not found', gate: 'r_clamp' };
       }
 
-      const maxRPerTrade = config.risk.max_r_per_trade || 1.0; // Default 1R if not set
+      const maxRPerTrade = config.risk?.max_r_per_trade ?? RISK_LIMITS.MAX_R_PER_TRADE;
 
       if (proposedRiskR > maxRPerTrade) {
         return {
@@ -168,6 +174,11 @@ export class PolicyGuardrails {
     currentPrice: number,
     isEvent: boolean
   ): PreTradeCheckResult {
+    // Validate inputs
+    if (!signalPrice || signalPrice <= 0 || !currentPrice || currentPrice <= 0) {
+      return { approved: false, reason: 'Invalid price data', gate: 'slippage' };
+    }
+
     try {
       const config = await BotConfig.findOne({ userId });
       if (!config) {
@@ -175,9 +186,11 @@ export class PolicyGuardrails {
       }
 
       const slippageBps = Math.abs((currentPrice - signalPrice) / signalPrice) * 10000;
+      
+      // Use constants as fallback
       const maxSlippageBps = isEvent 
-        ? config.risk.slippage_guard_bps_event 
-        : config.risk.slippage_guard_bps;
+        ? (config.risk?.slippage_guard_bps_event ?? SLIPPAGE.MAX_EVENT_BPS)
+        : (config.risk?.slippage_guard_bps ?? SLIPPAGE.MAX_NORMAL_BPS);
 
       if (slippageBps > maxSlippageBps) {
         return {

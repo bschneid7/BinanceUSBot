@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import { Types } from 'mongoose';
 import BotConfig from '../../models/BotConfig';
 import Alert from '../../models/Alert';
@@ -14,15 +15,15 @@ export class KillSwitch {
     reason: string
   ): Promise<void> {
     try {
-      console.log(`[KillSwitch] Executing ${haltType} kill-switch for user ${userId}: ${reason}`);
+      logger.info(`[KillSwitch] Executing ${haltType} kill-switch for user ${userId}: ${reason}`);
 
       // Get all open positions
       const openPositions = await Position.find({ userId, status: 'OPEN' });
-      console.log(`[KillSwitch] Flattening ${openPositions.length} open positions`);
+      logger.info(`[KillSwitch] Flattening ${openPositions.length} open positions`);
 
       // Close all positions
-      const closePromises = openPositions.map(position =>
-        positionManager.closePosition(position._id, 'KILL_SWITCH')
+      const closePromises = openPositions?.map(position =>
+        positionManager.closePosition(position._id as any, 'KILL_SWITCH')
       );
 
       await Promise.all(closePromises);
@@ -52,9 +53,9 @@ export class KillSwitch {
         timestamp: new Date(),
       });
 
-      console.log(`[KillSwitch] Kill-switch executed successfully - Bot status: ${config.botStatus}`);
+      logger.info(`[KillSwitch] Kill-switch executed successfully - Bot status: ${config.botStatus}`);
     } catch (error) {
-      console.error('[KillSwitch] Error executing kill-switch:', error);
+      logger.error('[KillSwitch] Error executing kill-switch:', error);
       throw error;
     }
   }
@@ -79,7 +80,7 @@ export class KillSwitch {
 
           // Auto-resume at next session (next day)
           if (currentDate > haltDateOnly) {
-            console.log('[KillSwitch] Auto-resume triggered for daily halt');
+            logger.info('[KillSwitch] Auto-resume triggered for daily halt');
             config.botStatus = 'ACTIVE';
             config.haltMetadata = {
               reason: 'Auto-resumed at new session',
@@ -102,7 +103,7 @@ export class KillSwitch {
 
       return false;
     } catch (error) {
-      console.error('[KillSwitch] Error checking auto-resume:', error);
+      logger.error('[KillSwitch] Error checking auto-resume:', error);
       return false;
     }
   }

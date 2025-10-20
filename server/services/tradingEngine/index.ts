@@ -1,3 +1,4 @@
+import logger from '../../utils/logger';
 import { Types } from 'mongoose';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
@@ -24,12 +25,12 @@ export class TradingEngine {
    */
   async start(userId: Types.ObjectId): Promise<void> {
     try {
-      console.log(`[TradingEngine] Starting engine for user ${userId}`);
+      logger.info(`[TradingEngine] Starting engine for user ${userId}`);
 
       // Check if scan interval is already active
       const userIdStr = userId.toString();
       if (this.scanIntervals.has(userIdStr)) {
-        console.log('[TradingEngine] Engine already running (scan interval active)');
+        logger.info('[TradingEngine] Engine already running (scan interval active)');
         return;
       }
 
@@ -61,26 +62,26 @@ export class TradingEngine {
       }
 
       // Initialize exchange info cache
-      console.log('[TradingEngine] Initializing exchange info cache...');
+      logger.info('[TradingEngine] Initializing exchange info cache...');
       await exchangeInfoCache.refresh();
 
       // Run position reconciliation on startup
-      console.log('[TradingEngine] Running position reconciliation...');
+      logger.info('[TradingEngine] Running position reconciliation...');
       const reconciliationResult = await positionReconciliationService.reconcile(userId);
-      console.log('[TradingEngine] Reconciliation complete:', {
+      logger.info('[TradingEngine] Reconciliation complete:', {
         matched: reconciliationResult.matched,
         fixed: reconciliationResult.fixed,
         errors: reconciliationResult.errors.length,
       });
 
       // Start User Data Stream for real-time order updates
-      console.log('[TradingEngine] Starting User Data Stream...');
+      logger.info('[TradingEngine] Starting User Data Stream...');
       try {
         await userDataStream.start(userId);
-        console.log('[TradingEngine] User Data Stream started successfully');
+        logger.info('[TradingEngine] User Data Stream started successfully');
       } catch (error) {
-        console.error('[TradingEngine] Failed to start User Data Stream:', error);
-        console.warn('[TradingEngine] Continuing without real-time updates (will use polling)');
+        logger.error('[TradingEngine] Failed to start User Data Stream:', error);
+        logger.warn('[TradingEngine] Continuing without real-time updates (will use polling)');
       }
 
       // Start self-scheduling scan loop (prevents overlaps)
@@ -89,7 +90,7 @@ export class TradingEngine {
         
         // Check if already running
         if (this.runningScans.has(userKey)) {
-          console.log('[TradingEngine] Scan cycle still running, skipping...');
+          logger.info('[TradingEngine] Scan cycle still running, skipping...');
           return;
         }
         
@@ -98,7 +99,7 @@ export class TradingEngine {
         try {
           await this.executeScanCycle(userId);
         } catch (error) {
-          console.error('[TradingEngine] Scan cycle error:', error);
+          logger.error('[TradingEngine] Scan cycle error:', error);
         } finally {
           this.runningScans.delete(userKey);
           
@@ -117,9 +118,9 @@ export class TradingEngine {
       // Start first scan immediately
       setTimeout(scheduleNextScan, 0);
       
-      console.log(`[TradingEngine] Engine started - Scanning every ${config.scanner.refresh_ms}ms`);
+      logger.info(`[TradingEngine] Engine started - Scanning every ${config?.scanner?.refresh_ms}ms`);
     } catch (error) {
-      console.error('[TradingEngine] Error starting engine:', error);
+      logger.error('[TradingEngine] Error starting engine:', error);
       throw error;
     }
   }
@@ -129,7 +130,7 @@ export class TradingEngine {
    */
   async stop(userId: Types.ObjectId): Promise<void> {
     try {
-      console.log(`[TradingEngine] Stopping engine for user ${userId}`);
+      logger.info(`[TradingEngine] Stopping engine for user ${userId}`);
 
       const userKey = userId.toString();
       
@@ -144,12 +145,12 @@ export class TradingEngine {
       this.runningScans.delete(userKey);
 
       // Stop User Data Stream
-      console.log('[TradingEngine] Stopping User Data Stream...');
+      logger.info('[TradingEngine] Stopping User Data Stream...');
       try {
         await userDataStream.stop();
-        console.log('[TradingEngine] User Data Stream stopped');
+        logger.info('[TradingEngine] User Data Stream stopped');
       } catch (error) {
-        console.error('[TradingEngine] Error stopping User Data Stream:', error);
+        logger.error('[TradingEngine] Error stopping User Data Stream:', error);
       }
 
       // Update state
@@ -159,9 +160,9 @@ export class TradingEngine {
         await state.save();
       }
 
-      console.log('[TradingEngine] Engine stopped');
+      logger.info('[TradingEngine] Engine stopped');
     } catch (error) {
-      console.error('[TradingEngine] Error stopping engine:', error);
+      logger.error('[TradingEngine] Error stopping engine:', error);
       throw error;
     }
   }
@@ -174,13 +175,13 @@ export class TradingEngine {
       // Check if engine should be running
       const state = await BotState.findOne({ userId });
       if (!state?.isRunning) {
-        console.log('[TradingEngine] Engine not running - skipping scan');
+        logger.info('[TradingEngine] Engine not running - skipping scan');
         return;
       }
 
       const config = await BotConfig.findOne({ userId });
       if (!config) {
-        console.error('[TradingEngine] Config not found - skipping scan');
+        logger.error('[TradingEngine] Config not found - skipping scan');
         return;
       }
 
@@ -189,22 +190,42 @@ export class TradingEngine {
         // Check for auto-resume
         const resumed = await killSwitch.checkAutoResume(userId);
         if (!resumed) {
-          console.log(`[TradingEngine] Bot status ${config.botStatus} - skipping scan`);
+          logger.info(`[TradingEngine] Bot status ${config.botStatus} - skipping scan`);
+          return;
+        }
+        
+        // Even if auto-resumed, verify loss limits are cleared
+        const tradingAllowedAfterResume = await lossLimitService.enforceLossLimits(userId);
+        if (!tradingAllowedAfterResume) {
+          logger.warn('[TradingEngine] Auto-resumed but loss limits still active - halting again');
+          await killSwitch.execute(userId, 'DAILY', 'Loss limits still active after auto-resume');
           return;
         }
       }
 
-      console.log('[TradingEngine] ===== Scan Cycle Start =====');
+      logger.info('[TradingEngine] ===== Scan Cycle Start =====');
 
       // Step 1: Update PnL tracking and recalculate R
-      await riskEngine.updatePnLTracking(userId);
-      await this.recalculateEquity(userId);
+      try {
+        await riskEngine.updatePnLTracking(userId);
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to update PnL tracking:', error);
+        // Continue with stale data - better than stopping
+      }
+      
+      try {
+        await this.recalculateEquity(userId);
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to recalculate equity:', error);
+        // Critical - abort scan cycle if equity calculation fails
+        return;
+      }
       // Note: Reserve levels are checked when placing orders via reserveManager.checkAvailableCapital()
 
       // Step 2: Check kill-switch
       const killSwitchResult = await riskEngine.checkKillSwitch(userId);
       if (killSwitchResult.shouldHalt) {
-        console.log(`[TradingEngine] Kill-switch triggered: ${killSwitchResult.reason}`);
+        logger.info(`[TradingEngine] Kill-switch triggered: ${killSwitchResult.reason}`);
         await killSwitch.execute(
           userId,
           killSwitchResult.haltType!,
@@ -216,12 +237,17 @@ export class TradingEngine {
       // Step 2.5: Check loss limits
       const tradingAllowed = await lossLimitService.enforceLossLimits(userId);
       if (!tradingAllowed) {
-        console.log('[TradingEngine] Loss limit reached - halting trading');
+        logger.info('[TradingEngine] Loss limit reached - halting trading');
         return;
       }
 
       // Step 3: Update all open positions
-      await positionManager.updateAllPositions(userId);
+      try {
+        await positionManager.updateAllPositions(userId);
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to update positions:', error);
+        // Continue - position updates are not critical for new signals
+      }
 
       // Step 4: Scan markets
       const marketData = await marketScanner.scanMarkets(userId);
@@ -229,16 +255,21 @@ export class TradingEngine {
       // Step 5: Generate signals
       const signals = await mlEnhancedSignalGenerator.generateSignals(userId, marketData);
 
-      console.log(`[TradingEngine] Generated ${signals.length} signals`);
+      logger.info(`[TradingEngine] Generated ${signals.length} signals`);
 
       // Step 6: Process signals
       for (const signal of signals) {
-        await this.processSignal(userId, signal);
+        try {
+          await this.processSignal(userId, signal);
+        } catch (error) {
+          logger.error(`[TradingEngine] Failed to process signal for ${signal.symbol}:`, error);
+          // Continue processing other signals
+        }
       }
 
-      console.log('[TradingEngine] ===== Scan Cycle Complete =====');
+      logger.info('[TradingEngine] ===== Scan Cycle Complete =====');
     } catch (error) {
-      console.error('[TradingEngine] Error in scan cycle:', error);
+      logger.error('[TradingEngine] Error in scan cycle:', error);
     }
   }
 
@@ -250,7 +281,7 @@ export class TradingEngine {
     signal: typeof signalGenerator.prototype
   ): Promise<void> {
     try {
-      console.log(`[TradingEngine] Processing signal: ${signal.symbol} ${signal.playbook} ${signal.action}`);
+      logger.info(`[TradingEngine] Processing signal: ${signal.symbol} ${signal.playbook} ${signal.action}`);
 
       const config = await BotConfig.findOne({ userId });
       const state = await BotState.findOne({ userId });
@@ -264,7 +295,7 @@ export class TradingEngine {
       const cooldownCheck = await marketScanner.checkSignalCooldown(
         userId,
         signal.symbol,
-        config.scanner.pair_signal_cooldown_min
+        config?.scanner?.pair_signal_cooldown_min
       );
 
       if (!cooldownCheck.allowed) {
@@ -273,7 +304,27 @@ export class TradingEngine {
       }
 
       // Calculate position size
+      // Validate that currentR is fresh (updated within last 5 minutes)
+      const now = new Date();
+      const rUpdatedAt = state.updatedAt || state.createdAt;
+      const rAge = now.getTime() - new Date(rUpdatedAt).getTime();
+      const MAX_R_AGE_MS = 5 * 60 * 1000; // 5 minutes
+      
+      if (rAge > MAX_R_AGE_MS) {
+        logger.warn(`[TradingEngine] currentR is stale (${Math.round(rAge/1000)}s old), skipping signal`);
+        await signalGenerator.recordSignal(userId, signal, 'SKIPPED', 'Stale R value - equity not recently calculated');
+        return;
+      }
+      
       const riskAmount = state.currentR;
+      
+      // Validate stop price is different from entry
+      if (Math.abs(signal.entryPrice - signal.stopPrice) < 0.0001) {
+        logger.warn(`[TradingEngine] Entry price equals stop price for ${signal.symbol}`);
+        await signalGenerator.recordSignal(userId, signal, 'SKIPPED', 'Invalid signal: entry price equals stop price');
+        return;
+      }
+      
       let quantity = riskEngine.calculatePositionSize(
         signal.entryPrice,
         signal.stopPrice,
@@ -297,10 +348,12 @@ export class TradingEngine {
       }
 
       // Apply correlation guard scaling
-      if (riskCheck.maxQuantity) {
+      if (riskCheck.maxQuantity !== undefined && riskCheck.maxQuantity < 1.0) {
+        const originalQuantity = quantity;
         quantity *= riskCheck.maxQuantity;
         notional = quantity * signal.entryPrice;
-        console.log(`[TradingEngine] Position scaled down by ${(riskCheck.maxQuantity * 100).toFixed(0)}% due to correlation guard`);
+        const reductionPct = ((1 - riskCheck.maxQuantity) * 100).toFixed(0);
+        logger.info(`[TradingEngine] Position scaled down by ${reductionPct}% (${originalQuantity.toFixed(8)} -> ${quantity.toFixed(8)}) due to correlation guard`);
       }
 
       // Check available capital
@@ -311,7 +364,7 @@ export class TradingEngine {
       }
 
       // Execute the signal
-      console.log(`[TradingEngine] Executing signal: ${signal.symbol} ${signal.action} ${quantity.toFixed(8)} @ $${signal.entryPrice.toFixed(2)}`);
+      logger.info(`[TradingEngine] Executing signal: ${signal.symbol} ${signal.action} ${quantity.toFixed(8)} @ $${signal.entryPrice.toFixed(2)}`);
 
       const orderResult = await executionRouter.executeSignal(
         userId,
@@ -342,9 +395,9 @@ export class TradingEngine {
       // Update last signal time
       await marketScanner.updateLastSignalTime(userId, signal.symbol);
 
-      console.log(`[TradingEngine] Signal executed successfully - Position ${position._id} created`);
+      logger.info(`[TradingEngine] Signal executed successfully - Position ${position._id as any} created`);
     } catch (error) {
-      console.error('[TradingEngine] Error processing signal:', error);
+      logger.error('[TradingEngine] Error processing signal:', error);
       await signalGenerator.recordSignal(
         userId,
         signal,
@@ -369,14 +422,14 @@ export class TradingEngine {
 
       // Calculate total unrealized PnL
       let totalUnrealizedPnl = 0;
-      openPositions.forEach(position => {
-        totalUnrealizedPnl += position.unrealized_pnl || 0;
+      openPositions?.forEach(position => {
+        totalUnrealizedPnl += position.unrealized_pnl ?? 0;
       });
 
       // Use existing equity from BotState
       // The equity should be synced manually using the balance sync script
       // or updated when Binance API credentials are configured
-      let baseEquity = state.equity || 7000; // Use existing equity as fallback
+      let baseEquity = state.equity ?? 7000; // Use existing equity as fallback
       
       // Only attempt to sync from Binance if API is properly configured
       if (binanceService.isConfigured()) {
@@ -403,8 +456,8 @@ export class TradingEngine {
                   try {
                     const symbol = `${balance.asset}${quote}`;
                     const ticker = await binanceService.getTickerPrice(symbol);
-                    if (ticker && ticker.price) {
-                      totalValue += total * parseFloat(ticker.price);
+                    if (ticker && ticker?.price) {
+                      totalValue += total * parseFloat(ticker?.price);
                       priceFound = true;
                       break;
                     }
@@ -423,33 +476,33 @@ export class TradingEngine {
           if (totalValue > 0) {
             // Only use the calculated value if it's reasonable (at least 80% of existing equity)
             // This prevents incorrect valuations when price lookups fail
-            const minExpectedEquity = (state.equity || 0) * 0.8;
+            const minExpectedEquity = (state.equity ?? 0) * 0.8;
             if (totalValue >= minExpectedEquity || !state.equity) {
               baseEquity = totalValue;
-              console.log(`[TradingEngine] Synced base equity from Binance API: $${baseEquity.toFixed(2)}`);
+              logger.info(`[TradingEngine] Synced base equity from Binance API: $${baseEquity.toFixed(2)}`);
             } else {
-              console.warn(`[TradingEngine] Calculated equity ($${totalValue.toFixed(2)}) is much lower than existing ($${state.equity.toFixed(2)}), keeping existing value`);
-              console.warn(`[TradingEngine] This usually means price lookups failed for crypto assets`);
+              logger.warn(`[TradingEngine] Calculated equity ($${totalValue.toFixed(2)}) is much lower than existing ($${state.equity.toFixed(2)}), keeping existing value`);
+              logger.warn(`[TradingEngine] This usually means price lookups failed for crypto assets`);
               // Keep existing baseEquity
             }
           } else {
-            console.log(`[TradingEngine] Binance API returned 0, using existing equity: $${baseEquity.toFixed(2)}`);
+            logger.info(`[TradingEngine] Binance API returned 0, using existing equity: $${baseEquity.toFixed(2)}`);
           }
         } catch (error) {
-          console.log(`[TradingEngine] Could not sync from Binance API, using existing equity: $${baseEquity.toFixed(2)}`);
+          logger.info(`[TradingEngine] Could not sync from Binance API, using existing equity: $${baseEquity.toFixed(2)}`);
         }
       } else {
         // API not configured - this is normal, equity should be synced manually
-        console.log(`[TradingEngine] Using existing equity (Binance API not configured): $${baseEquity.toFixed(2)}`);
+        logger.info(`[TradingEngine] Using existing equity (Binance API not configured): $${baseEquity.toFixed(2)}`);
       }
 
       // Update equity
       state.equity = baseEquity + totalUnrealizedPnl;
-      state.currentR = state.equity * config.risk.R_pct;
+      state.currentR = state.equity * config?.risk?.R_pct;
 
       await state.save();
     } catch (error) {
-      console.error('[TradingEngine] Error recalculating equity:', error);
+      logger.error('[TradingEngine] Error recalculating equity:', error);
     }
   }
 
@@ -469,7 +522,7 @@ export class TradingEngine {
         lastSignalTimestamp: state?.lastSignalTimestamp,
       };
     } catch (error) {
-      console.error('[TradingEngine] Error getting status:', error);
+      logger.error('[TradingEngine] Error getting status:', error);
       return { isRunning: false };
     }
   }

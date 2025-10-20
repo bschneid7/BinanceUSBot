@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import Position from '../../models/Position';
+import { RESERVES } from './constants';
 
 export class ReserveManager {
   /**
@@ -23,16 +24,31 @@ export class ReserveManager {
       const openPositions = await Position.find({ userId, status: 'OPEN' });
       let currentExposure = 0;
 
-      openPositions.forEach(position => {
-        const notional = (position.current_price || position.entry_price) * position.quantity;
+      for (const position of openPositions) {
+        const price = position.current_price || position.entry_price;
+        if (!price || price <= 0 || !position.quantity || position.quantity <= 0) {
+          console.warn(`[ReserveManager] Invalid position data for ${position.symbol}`);
+          continue;
+        }
+        const notional = price * position.quantity;
+        if (isNaN(notional) || notional < 0) {
+          console.warn(`[ReserveManager] Invalid notional for ${position.symbol}: ${notional}`);
+          continue;
+        }
         currentExposure += notional;
-      });
+      }
+
+      // Validate equity
+      if (!state.equity || state.equity <= 0) {
+        return { available: false, reason: 'Invalid equity value' };
+      }
 
       // Available capital = equity - exposure
       const availableCapital = state.equity - currentExposure;
 
       // Check reserve floor
-      const reserveFloor = state.equity * config.reserve.floor_pct;
+      const reserveFloorPct = config.reserve?.floor_pct ?? (RESERVES.MIN_RESERVE_PCT / 100);
+      const reserveFloor = state.equity * reserveFloorPct;
       const capitalAfterTrade = availableCapital - requiredCapital;
 
       if (capitalAfterTrade < reserveFloor) {
@@ -62,13 +78,23 @@ export class ReserveManager {
       const openPositions = await Position.find({ userId, status: 'OPEN' });
       let currentExposure = 0;
 
-      openPositions.forEach(position => {
-        const notional = (position.current_price || position.entry_price) * position.quantity;
-        currentExposure += notional;
-      });
+      for (const position of openPositions) {
+        const price = position.current_price || position.entry_price;
+        if (!price || price <= 0 || !position.quantity || position.quantity <= 0) {
+          continue;
+        }
+        const notional = price * position.quantity;
+        if (!isNaN(notional) && notional >= 0) {
+          currentExposure += notional;
+        }
+      }
+
+      if (!state.equity || state.equity <= 0) {
+        return 0;
+      }
 
       const reserve = state.equity - currentExposure;
-      const reservePct = state.equity > 0 ? (reserve / state.equity) * 100 : 0;
+      const reservePct = (reserve / state.equity) * 100;
 
       return reservePct;
     } catch (error) {
