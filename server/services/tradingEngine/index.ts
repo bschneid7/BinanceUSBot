@@ -13,6 +13,7 @@ import binanceService from '../binanceService';
 import lossLimitService from '../lossLimitService';
 import positionReconciliationService from '../positionReconciliationService';
 import exchangeInfoCache from '../exchangeInfoCache';
+import userDataStream from './userDataStream';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -71,6 +72,16 @@ export class TradingEngine {
         fixed: reconciliationResult.fixed,
         errors: reconciliationResult.errors.length,
       });
+
+      // Start User Data Stream for real-time order updates
+      console.log('[TradingEngine] Starting User Data Stream...');
+      try {
+        await userDataStream.start(userId);
+        console.log('[TradingEngine] User Data Stream started successfully');
+      } catch (error) {
+        console.error('[TradingEngine] Failed to start User Data Stream:', error);
+        console.warn('[TradingEngine] Continuing without real-time updates (will use polling)');
+      }
 
       // Start self-scheduling scan loop (prevents overlaps)
       const scheduleNextScan = async () => {
@@ -131,6 +142,15 @@ export class TradingEngine {
       
       // Remove from running scans
       this.runningScans.delete(userKey);
+
+      // Stop User Data Stream
+      console.log('[TradingEngine] Stopping User Data Stream...');
+      try {
+        await userDataStream.stop();
+        console.log('[TradingEngine] User Data Stream stopped');
+      } catch (error) {
+        console.error('[TradingEngine] Error stopping User Data Stream:', error);
+      }
 
       // Update state
       const state = await BotState.findOne({ userId });

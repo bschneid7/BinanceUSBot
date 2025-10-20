@@ -606,6 +606,43 @@ class BinanceService {
       throw error;
     }
   }
+
+  /**
+   * Create a listen key for User Data Stream
+   */
+  async createListenKey(): Promise<string> {
+    try {
+      const response = await this.signedRequest('POST', '/api/v3/userDataStream', {});
+      return (response as any).listenKey;
+    } catch (error) {
+      console.error('[BinanceService] Error creating listen key:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Keep alive a listen key (ping every 30 minutes)
+   */
+  async keepAliveListenKey(listenKey: string): Promise<void> {
+    try {
+      await this.signedRequest('PUT', '/api/v3/userDataStream', { listenKey });
+    } catch (error) {
+      console.error('[BinanceService] Error keeping listen key alive:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a listen key
+   */
+  async deleteListenKey(listenKey: string): Promise<void> {
+    try {
+      await this.signedRequest('DELETE', '/api/v3/userDataStream', { listenKey });
+    } catch (error) {
+      console.error('[BinanceService] Error deleting listen key:', error);
+      throw error;
+    }
+  }
 }
 
 export default new BinanceService();
