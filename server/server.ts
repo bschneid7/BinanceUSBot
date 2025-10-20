@@ -16,6 +16,7 @@ import taxReportRoutes from './routes/taxReportRoutes';
 import engineRoutes from './routes/engineRoutes';
 import ppoRoutes from './routes/ppoRoutes';
 import mlRoutes from './routes/mlRoutes';
+import mlMetricsRoutes from './routes/mlMetricsRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 
@@ -83,6 +84,8 @@ app.use('/api/engine', engineRoutes);
 app.use('/api/ppo', ppoRoutes);
 // ML Routes
 app.use('/api/ml', mlRoutes);
+// ML Metrics Routes
+app.use('/api/ml-metrics', mlMetricsRoutes);
 
 // Serve static files from React app in production
 // Use dynamic path based on environment

@@ -4,6 +4,7 @@ import signalGenerator, { Signal } from './signalGenerator';
 import mlModelService from '../mlModelService';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
+import MLPerformanceLog from '../../models/MLPerformanceLog';
 
 /**
  * ML-Enhanced Signal Generator
@@ -60,6 +61,58 @@ class MLEnhancedSignalGenerator {
     } catch (error) {
       console.error('[MLEnhancedSigGen] Error getting PPO agent:', error);
       return null;
+    }
+  }
+
+  /**
+   * Validate if price adjustment is within ML tolerance
+   * Called after maker-first adjusts price
+   */
+  async validatePriceAdjustment(
+    userId: Types.ObjectId,
+    signal: Signal,
+    originalPrice: number,
+    adjustedPrice: number
+  ): Promise<{
+    approved: boolean;
+    reason: string;
+    slippageBps: number;
+  }> {
+    try {
+      // Calculate price difference in basis points
+      const slippageBps = Math.abs((adjustedPrice - originalPrice) / originalPrice) * 10000;
+
+      // Get user config for ML price tolerance
+      const config = await BotConfig.findOne({ userId });
+      const mlPriceTolerance = config?.execution?.ml_price_tolerance_bps || 15;
+
+      // Check if within tolerance
+      if (slippageBps <= mlPriceTolerance) {
+        return {
+          approved: true,
+          reason: `Price adjustment ${slippageBps.toFixed(2)}bps within ML tolerance ${mlPriceTolerance}bps`,
+          slippageBps,
+        };
+      }
+
+      // Price shift exceeds ML tolerance
+      console.log(
+        `[MLEnhancedSigGen] Price adjustment ${slippageBps.toFixed(2)}bps exceeds ML tolerance ${mlPriceTolerance}bps for ${signal.symbol}`
+      );
+
+      return {
+        approved: false,
+        reason: `Price adjustment ${slippageBps.toFixed(2)}bps exceeds ML tolerance ${mlPriceTolerance}bps`,
+        slippageBps,
+      };
+    } catch (error) {
+      console.error('[MLEnhancedSigGen] Error validating price adjustment:', error);
+      // On error, approve to avoid blocking trades
+      return {
+        approved: true,
+        reason: 'Error in validation, defaulting to approve',
+        slippageBps: 0,
+      };
     }
   }
 
@@ -197,7 +250,9 @@ class MLEnhancedSignalGenerator {
         }
 
         // Get ML prediction
+        const mlStartTime = Date.now();
         const mlPrediction = await this.getMLPrediction(userId, signal, symbolData);
+        const mlProcessingTime = Date.now() - mlStartTime;
 
         if (!mlPrediction) {
           // If ML prediction fails, keep the signal
@@ -205,12 +260,17 @@ class MLEnhancedSignalGenerator {
           continue;
         }
 
+        // Determine if ML approves this signal
+        let approved = false;
+        let rejectionReason: string | undefined;
+
         // Filter based on ML prediction
         if (signal.action === 'BUY' && mlPrediction.actionName === 'buy') {
           // ML agrees with buy signal - boost confidence
           console.log(
             `[MLEnhancedSigGen] ✓ ML confirms BUY signal for ${signal.symbol} (confidence: ${(mlPrediction.confidence * 100).toFixed(1)}%)`
           );
+          approved = true;
           enhancedSignals.push(signal);
         } else if (signal.action === 'BUY' && mlPrediction.actionName === 'hold') {
           // ML suggests hold - reduce confidence but keep if high ML confidence
@@ -218,20 +278,60 @@ class MLEnhancedSignalGenerator {
             console.log(
               `[MLEnhancedSigGen] ✓ ML suggests HOLD for ${signal.symbol}, but low confidence - keeping signal`
             );
+            approved = true;
             enhancedSignals.push(signal);
           } else {
             console.log(
               `[MLEnhancedSigGen] ✗ ML strongly suggests HOLD for ${signal.symbol} - filtering out`
             );
+            approved = false;
+            rejectionReason = `ML strongly suggests HOLD (confidence: ${(mlPrediction.confidence * 100).toFixed(1)}%)`;
           }
         } else if (signal.action === 'BUY' && mlPrediction.actionName === 'sell') {
           // ML strongly disagrees - filter out
           console.log(
             `[MLEnhancedSigGen] ✗ ML predicts SELL for ${signal.symbol} - filtering out BUY signal`
           );
+          approved = false;
+          rejectionReason = `ML predicts opposite direction (SELL)`;
         } else {
           // Default: keep signal
+          approved = true;
           enhancedSignals.push(signal);
+        }
+
+        // Log ML performance for this signal
+        try {
+          await MLPerformanceLog.create({
+            userId,
+            timestamp: new Date(),
+            signal: {
+              symbol: signal.symbol,
+              action: signal.action,
+              playbook: signal.playbook,
+              price: signal.entry_price,
+              atr: symbolData.atr,
+              volatility: symbolData.volatility,
+              volume: symbolData.volume,
+              spread_bps: symbolData.spread_bps,
+            },
+            ml: {
+              modelId: deployedModel._id,
+              modelVersion: deployedModel.version,
+              prediction: mlPrediction.actionName,
+              confidence: mlPrediction.confidence,
+              approved,
+              rejectionReason,
+              processingTimeMs: mlProcessingTime,
+            },
+            marketContext: {
+              priceAtSignal: symbolData.price,
+              vwap: symbolData.vwap,
+            },
+          });
+        } catch (logError) {
+          console.error('[MLEnhancedSigGen] Error logging ML performance:', logError);
+          // Don't fail signal generation if logging fails
         }
       }
 
