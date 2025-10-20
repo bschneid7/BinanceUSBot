@@ -1,22 +1,20 @@
-# Dependencies
-node_modules
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log
 
-# Build outputs
-dist
-build
-.next
-
-# Environment files
+# Environment files (use docker-compose env_file)
 .env
 .env.local
 .env.*.local
 
+# Git
+.git/
+.gitignore
+.gitattributes
+
 # IDE
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
@@ -25,40 +23,31 @@ build
 .DS_Store
 Thumbs.db
 
-# Git
-.git
-.gitignore
-
-# Documentation
-*.md
-!README.md
-
-# Testing
-coverage
-.nyc_output
-
 # Logs
-logs
+logs/
 *.log
 
-# Client development
-client/node_modules
-client/dist
+# Test files
+test/
+*.test.ts
+*.spec.ts
+coverage/
 
-# Server development
-server/node_modules
-server/dist
+# Documentation
+README.md
+docs/
+*.md
 
-# Shared
-shared/node_modules
-shared/dist
+# CI/CD
+.github/
+.gitlab-ci.yml
 
-# Docker
-Dockerfile
-docker-compose*.yml
-.dockerignore
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
 
-# Deployment scripts
-deploy.sh
-scripts/setup-server.sh
-scripts/docker-deploy.sh
+# Temporary files
+tmp/
+temp/
+
