@@ -439,25 +439,40 @@ export class TradingEngine {
           // Calculate total portfolio value in USD
           let totalValue = 0;
           
+          logger.info('[TradingEngine] Calculating total portfolio value from Binance balances...');
+          
+          let assetsWithBalance = 0;
+          let assetsPriced = 0;
+          
           for (const balance of accountInfo.balances) {
             const free = parseFloat(balance.free);
             const locked = parseFloat(balance.locked);
             const total = free + locked;
             
-            if (total > 0) {
-              if (balance.asset === 'USD' || balance.asset === 'USDT' || balance.asset === 'USDC') {
+            if (total > 0.00000001) {
+              assetsWithBalance++;
+              
+              if (balance.asset === 'USD' || balance.asset === 'USDT' || balance.asset === 'USDC' || balance.asset === 'BUSD') {
                 // Stablecoins count as 1:1 USD
                 totalValue += total;
+                assetsPriced++;
+                logger.info(`[TradingEngine] ${balance.asset}: ${total.toFixed(8)} @ $1.00 = $${total.toFixed(2)}`);
               } else {
                 // For other assets, get current price and convert to USD
-                // Try multiple quote currencies: USDT, USD, USDC
+                // Try USD first (Binance.US primary quote), then USDT, then USDC
                 let priceFound = false;
-                for (const quote of ['USDT', 'USD', 'USDC']) {
+                let assetValueUSD = 0;
+                
+                for (const quote of ['USD', 'USDT', 'USDC']) {
                   try {
                     const symbol = `${balance.asset}${quote}`;
                     const ticker = await binanceService.getTickerPrice(symbol);
-                    if (ticker && ticker?.price) {
-                      totalValue += total * parseFloat(ticker?.price);
+                    if (ticker && ticker.price) {
+                      const price = parseFloat(ticker.price);
+                      assetValueUSD = total * price;
+                      totalValue += assetValueUSD;
+                      assetsPriced++;
+                      logger.info(`[TradingEngine] ${balance.asset}: ${total.toFixed(8)} @ $${price.toFixed(2)} = $${assetValueUSD.toFixed(2)}`);
                       priceFound = true;
                       break;
                     }
@@ -466,22 +481,30 @@ export class TradingEngine {
                     continue;
                   }
                 }
+                
                 if (!priceFound) {
-                  console.debug(`[TradingEngine] Could not get price for ${balance.asset}`);
+                  logger.warn(`[TradingEngine] Could not get price for ${balance.asset} (${total.toFixed(8)} units) - skipping from equity calculation`);
                 }
               }
             }
           }
           
+          logger.info(`[TradingEngine] Total portfolio value: $${totalValue.toFixed(2)} (${assetsPriced}/${assetsWithBalance} assets priced)`);
+          
           if (totalValue > 0) {
-            // Only use the calculated value if it's reasonable (at least 80% of existing equity)
-            // This prevents incorrect valuations when price lookups fail
+            // Use calculated value if:
+            // 1. We successfully priced at least 90% of assets (high confidence), OR
+            // 2. Calculated value is at least 80% of existing equity (reasonable change), OR
+            // 3. No existing equity to compare against
+            const pricingSuccessRate = assetsWithBalance > 0 ? assetsPriced / assetsWithBalance : 0;
             const minExpectedEquity = (state.equity ?? 0) * 0.8;
-            if (totalValue >= minExpectedEquity || !state.equity) {
+            
+            if (pricingSuccessRate >= 0.9 || totalValue >= minExpectedEquity || !state.equity) {
               baseEquity = totalValue;
-              logger.info(`[TradingEngine] Synced base equity from Binance API: $${baseEquity.toFixed(2)}`);
+              logger.info(`[TradingEngine] ✅ Synced base equity from Binance API: $${baseEquity.toFixed(2)} (pricing success: ${(pricingSuccessRate * 100).toFixed(1)}%)`);
             } else {
               logger.warn(`[TradingEngine] Calculated equity ($${totalValue.toFixed(2)}) is much lower than existing ($${state.equity.toFixed(2)}), keeping existing value`);
+              logger.warn(`[TradingEngine] Pricing success rate: ${(pricingSuccessRate * 100).toFixed(1)}% (${assetsPriced}/${assetsWithBalance} assets)`);
               logger.warn(`[TradingEngine] This usually means price lookups failed for crypto assets`);
               // Keep existing baseEquity
             }

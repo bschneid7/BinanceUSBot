@@ -593,6 +593,21 @@ class BinanceService {
   }
 
   /**
+   * Get current ticker price for a symbol
+   */
+  async getTickerPrice(symbol: string): Promise<{ symbol: string; price: string } | null> {
+    try {
+      const response = await this.client.get('/api/v3/ticker/price', {
+        params: { symbol },
+      });
+      return response.data;
+    } catch (error) {
+      // Return null if symbol not found (instead of throwing)
+      return null;
+    }
+  }
+
+  /**
    * Get current average price for a symbol
    */
   async getAveragePrice(symbol: string): Promise<{ price: string }> {
