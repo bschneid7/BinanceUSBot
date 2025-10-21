@@ -20,7 +20,9 @@
     "test:market-data": "tsx scripts/testMarketDataFlow.ts",
     "train:ppo": "tsx services/tradingEngine/trainPPO.ts",
     "stake:idle": "tsx ../scripts/stakeIdle.ts",
-    "tax:generate": "tsx ../scripts/generateTax.ts"
+    "tax:generate": "tsx ../scripts/generateTax.ts",
+    "backtest": "tsx scripts/runBacktest.ts",
+    "download-data": "tsx scripts/downloadHistoricalData.ts"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +32,7 @@
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-node": "^4.22.0",
     "@types/ws": "^8.18.1",
+    "adm-zip": "^0.5.16",
     "axios": "^1.7.7",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.2",
@@ -37,6 +40,7 @@
     "connect-flash": "^0.1.1",
     "connect-mongo": "^5.1.0",
     "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.4.1",
     "ejs": "^3.1.9",
