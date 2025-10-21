@@ -17,7 +17,7 @@ router.get('/performance', requireUser(), async (req: Request, res: Response) =>
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    const metrics = await analyticsService.getPerformanceMetrics(req.user._id);
+    const metrics = await analyticsService.getPerformanceStats(req.user._id);
 
     console.log(`[AnalyticsRoutes] Performance metrics retrieved successfully`);
     res.status(200).json({ metrics });

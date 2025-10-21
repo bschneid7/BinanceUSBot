@@ -1,7 +1,8 @@
 import axios from 'axios';
 import logger from '../utils/logger';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Use current origin for API calls (works with nginx proxy)
+const API_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
@@ -30,33 +31,9 @@ export const refreshAccessToken = async (refreshToken: string) => {
   return response.data;
 };
 
-export const changePassword = async (currentPassword: string, newPassword: string) => {
-  const response = await api.post('/auth/change-password', {
-    currentPassword,
-    newPassword
-  });
-  return response.data;
-};
-
-export const getBotStatus = async () => {
-  const response = await api.get('/bot/status');
-  return response.data;
-};
-
-export const startBot = async () => {
-  const response = await api.post('/bot/start');
-  return response.data;
-};
-
-export const stopBot = async () => {
-  const response = await api.post('/bot/stop');
-  return response.data;
-};
-
-export const getPositions = async () => {
-  const response = await api.get('/positions');
-  return response.data;
-};
-
-// Default export for compatibility with trading.ts
 export default api;
+
+export const changePassword = async (currentPassword: string, newPassword: string) => {
+  const response = await api.post('/auth/change-password', { currentPassword, newPassword });
+  return response.data;
+};

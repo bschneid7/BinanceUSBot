@@ -2,7 +2,7 @@ import api from './api';
 import logger from '../utils/logger';
 
 // Description: Train PPO agent (starts background job)
-// Endpoint: POST /api/ppo/train
+// Endpoint: POST /ppo/train
 // Request: { episodes: number, historicalData?: Array<{price: number, volume: number, volatility: number}> }
 // Response: { success: boolean, message: string, jobStatus: string, modelId: string }
 export const trainPPO = async (data: {
@@ -10,7 +10,7 @@ export const trainPPO = async (data: {
   historicalData?: Array<{ price: number; volume: number; volatility: number }>;
 }) => {
   try {
-    const response = await api.post('/api/ppo/train', data);
+    const response = await api.post('/ppo/train', data);
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
@@ -20,12 +20,12 @@ export const trainPPO = async (data: {
 };
 
 // Description: Get training job status
-// Endpoint: GET /api/ppo/training-status
+// Endpoint: GET /ppo/training-status
 // Request: {}
 // Response: { status: string, progress: number, avgReward?: number, stats?: object, duration?: number, error?: string, modelId?: string, elapsedTime?: number }
 export const getTrainingStatus = async () => {
   try {
-    const response = await api.get('/api/ppo/training-status');
+    const response = await api.get('/ppo/training-status');
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
@@ -35,12 +35,12 @@ export const getTrainingStatus = async () => {
 };
 
 // Description: Get action from PPO agent
-// Endpoint: POST /api/ppo/action
+// Endpoint: POST /ppo/action
 // Request: { state: number[] } (5-element array: [price, volume, volatility, sentiment, position])
 // Response: { action: number, actionName: string } (0=hold, 1=buy, 2=sell)
 export const getPPOAction = async (state: number[]) => {
   try {
-    const response = await api.post('/api/ppo/action', { state });
+    const response = await api.post('/ppo/action', { state });
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
@@ -50,12 +50,12 @@ export const getPPOAction = async (state: number[]) => {
 };
 
 // Description: Get PPO agent stats
-// Endpoint: GET /api/ppo/stats
+// Endpoint: GET /ppo/stats
 // Request: {}
 // Response: { exists: boolean, stats: { memorySize: number, actorParams: number, criticParams: number } }
 export const getPPOStats = async () => {
   try {
-    const response = await api.get('/api/ppo/stats');
+    const response = await api.get('/ppo/stats');
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};
@@ -65,12 +65,12 @@ export const getPPOStats = async () => {
 };
 
 // Description: Reset PPO agent
-// Endpoint: POST /api/ppo/reset
+// Endpoint: POST /ppo/reset
 // Request: {}
 // Response: { success: boolean, message: string }
 export const resetPPO = async () => {
   try {
-    const response = await api.post('/api/ppo/reset');
+    const response = await api.post('/ppo/reset');
     return response.data;
   } catch (error: unknown) {
     const err = error as {response?: {data?: {error?: string}}, message?: string};

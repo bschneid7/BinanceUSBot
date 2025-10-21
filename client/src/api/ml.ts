@@ -2,7 +2,7 @@ import api from './api';
 import logger from '../utils/logger';
 
 // Description: Get all ML models for user
-// Endpoint: GET /api/ml/models
+// Endpoint: GET /ml/models
 // Request: { status?: 'TRAINING' | 'ACTIVE' | 'ARCHIVED' | 'FAILED', isDeployed?: boolean }
 // Response: { models: Array<MLModel> }
 export const getMLModels = async (filters?: {
@@ -15,7 +15,7 @@ export const getMLModels = async (filters?: {
     if (filters?.isDeployed !== undefined)
       params.append('isDeployed', filters.isDeployed.toString());
 
-    const response = await api.get(`/api/ml/models?${params.toString()}`);
+    const response = await api.get(`/ml/models?${params.toString()}`);
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
@@ -25,12 +25,12 @@ export const getMLModels = async (filters?: {
 };
 
 // Description: Get deployed ML model for user
-// Endpoint: GET /api/ml/deployed
+// Endpoint: GET /ml/deployed
 // Request: {}
 // Response: { model: MLModel | null }
 export const getDeployedModel = async () => {
   try {
-    const response = await api.get('/api/ml/deployed');
+    const response = await api.get('/ml/deployed');
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
@@ -40,12 +40,12 @@ export const getDeployedModel = async () => {
 };
 
 // Description: Get ML model by ID
-// Endpoint: GET /api/ml/models/:id
+// Endpoint: GET /ml/models/:id
 // Request: {}
 // Response: { model: MLModel }
 export const getMLModelById = async (id: string) => {
   try {
-    const response = await api.get(`/api/ml/models/${id}`);
+    const response = await api.get(`/ml/models/${id}`);
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
@@ -55,12 +55,12 @@ export const getMLModelById = async (id: string) => {
 };
 
 // Description: Deploy an ML model
-// Endpoint: POST /api/ml/models/:id/deploy
+// Endpoint: POST /ml/models/:id/deploy
 // Request: {}
 // Response: { success: boolean, model: MLModel }
 export const deployMLModel = async (id: string) => {
   try {
-    const response = await api.post(`/api/ml/models/${id}/deploy`);
+    const response = await api.post(`/ml/models/${id}/deploy`);
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
@@ -70,12 +70,12 @@ export const deployMLModel = async (id: string) => {
 };
 
 // Description: Archive an ML model
-// Endpoint: POST /api/ml/models/:id/archive
+// Endpoint: POST /ml/models/:id/archive
 // Request: {}
 // Response: { success: boolean, model: MLModel }
 export const archiveMLModel = async (id: string) => {
   try {
-    const response = await api.post(`/api/ml/models/${id}/archive`);
+    const response = await api.post(`/ml/models/${id}/archive`);
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
@@ -85,7 +85,7 @@ export const archiveMLModel = async (id: string) => {
 };
 
 // Description: Update model backtest performance
-// Endpoint: PUT /api/ml/models/:id/backtest
+// Endpoint: PUT /ml/models/:id/backtest
 // Request: { backtestWinRate: number, backtestProfitFactor: number, backtestSharpeRatio: number, backtestMaxDrawdown: number, backtestTotalTrades: number }
 // Response: { success: boolean, model: MLModel }
 export const updateModelBacktest = async (
@@ -99,7 +99,7 @@ export const updateModelBacktest = async (
   }
 ) => {
   try {
-    const response = await api.put(`/api/ml/models/${id}/backtest`, performance);
+    const response = await api.put(`/ml/models/${id}/backtest`, performance);
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
@@ -109,12 +109,12 @@ export const updateModelBacktest = async (
 };
 
 // Description: Get ML model statistics
-// Endpoint: GET /api/ml/stats
+// Endpoint: GET /ml/stats
 // Request: {}
 // Response: { stats: { totalModels, activeModels, deployedModels, trainingModels, archivedModels, failedModels, bestModel } }
 export const getMLStats = async () => {
   try {
-    const response = await api.get('/api/ml/stats');
+    const response = await api.get('/ml/stats');
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
@@ -124,12 +124,12 @@ export const getMLStats = async () => {
 };
 
 // Description: Update live performance for deployed model
-// Endpoint: POST /api/ml/update-live-performance
+// Endpoint: POST /ml/update-live-performance
 // Request: {}
 // Response: { success: boolean }
 export const updateLivePerformance = async () => {
   try {
-    const response = await api.post('/api/ml/update-live-performance');
+    const response = await api.post('/ml/update-live-performance');
     return response.data;
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } }; message?: string };
