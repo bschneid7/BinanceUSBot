@@ -81,6 +81,16 @@ interface SymbolPrecision {
   stepSize: number;
 }
 
+interface CachedPrice {
+  price: number;
+  timestamp: number;
+}
+
+interface CachedBalance {
+  balance: number;
+  timestamp: number;
+}
+
 class BinanceService {
   private apiKey: string;
   private apiSecret: string;
@@ -89,6 +99,18 @@ class BinanceService {
   private timeOffsetMs: number = 0;
   private lastTimeSync: number = 0;
   private recvWindowMs: number = 5000;
+  
+  // Price caching with TTL
+  private priceCache: Map<string, CachedPrice> = new Map();
+  private readonly PRICE_CACHE_TTL = 30000; // 30 seconds
+  
+  // Balance caching with TTL
+  private balanceCache: Map<string, CachedBalance> = new Map();
+  private readonly BALANCE_CACHE_TTL = 10000; // 10 seconds
+  
+  // Retry configuration
+  private readonly MAX_RETRIES = 5;
+  private readonly BASE_RETRY_DELAY = 1000; // 1 second
 
   constructor() {
     this.apiKey = process.env.BINANCE_US_API_KEY || '';
@@ -127,6 +149,45 @@ class BinanceService {
       console.error('[BinanceService] Time sync failed:', error);
       // Continue with current offset
     }
+  }
+
+  /**
+   * Retry a function with exponential backoff
+   */
+  private async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    operationName: string = 'operation',
+    maxAttempts: number = this.MAX_RETRIES
+  ): Promise<T> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        const isLastAttempt = attempt === maxAttempts - 1;
+        
+        // Don't retry on certain errors
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.error(`[BinanceService] ${operationName} failed with auth error, not retrying`);
+          throw error;
+        }
+        
+        if (isLastAttempt) {
+          console.error(`[BinanceService] ${operationName} failed after ${maxAttempts} attempts`);
+          throw error;
+        }
+        
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        const delay = this.BASE_RETRY_DELAY * Math.pow(2, attempt);
+        console.warn(
+          `[BinanceService] ${operationName} attempt ${attempt + 1} failed, retrying in ${delay}ms...`,
+          error.message
+        );
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    throw new Error(`${operationName} failed after ${maxAttempts} attempts`);
   }
 
   /**
@@ -318,27 +379,30 @@ class BinanceService {
   }): Promise<BinanceOrderResponse> {
     console.log('[BinanceService] Placing order:', params);
 
-    const orderParams: Record<string, unknown> = {
-      symbol: params.symbol,
-      side: params.side,
-      type: params.type,
-      quantity: params.quantity,
-      newOrderRespType: params.newOrderRespType ?? 'FULL', // Default to FULL for fee data
-    };
+    // Wrap in retry logic for reliability
+    return await this.retryWithBackoff(async () => {
+      const orderParams: Record<string, unknown> = {
+        symbol: params.symbol,
+        side: params.side,
+        type: params.type,
+        quantity: params.quantity,
+        newOrderRespType: params.newOrderRespType ?? 'FULL', // Default to FULL for fee data
+      };
 
-    if (params.price) orderParams.price = params.price;
-    if (params.stopPrice) orderParams.stopPrice = params.stopPrice;
-    if (params.timeInForce) orderParams.timeInForce = params.timeInForce;
-    if (params.newClientOrderId)
-      orderParams.newClientOrderId = params.newClientOrderId;
+      if (params.price) orderParams.price = params.price;
+      if (params.stopPrice) orderParams.stopPrice = params.stopPrice;
+      if (params.timeInForce) orderParams.timeInForce = params.timeInForce;
+      if (params.newClientOrderId)
+        orderParams.newClientOrderId = params.newClientOrderId;
 
-    const response = await this.signedRequest(
-      'POST',
-      '/api/v3/order',
-      orderParams
-    );
-    console.log('[BinanceService] Order placed successfully:', response);
-    return response as BinanceOrderResponse;
+      const response = await this.signedRequest(
+        'POST',
+        '/api/v3/order',
+        orderParams
+      );
+      console.log('[BinanceService] Order placed successfully:', response);
+      return response as BinanceOrderResponse;
+    }, `placeOrder(${params.symbol} ${params.side})`);
   }
 
   /**
@@ -593,13 +657,28 @@ class BinanceService {
   }
 
   /**
-   * Get current ticker price for a symbol
+   * Get current ticker price for a symbol (with caching)
    */
   async getTickerPrice(symbol: string): Promise<{ symbol: string; price: string } | null> {
+    // Check cache first
+    const cached = this.priceCache.get(symbol);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < this.PRICE_CACHE_TTL) {
+      // Cache hit - return cached price
+      return { symbol, price: cached.price.toString() };
+    }
+    
+    // Cache miss - fetch from API
     try {
       const response = await this.client.get('/api/v3/ticker/price', {
         params: { symbol },
       });
+      
+      // Update cache
+      const price = parseFloat(response.data.price);
+      this.priceCache.set(symbol, { price, timestamp: now });
+      
       return response.data;
     } catch (error) {
       // Return null if symbol not found (instead of throwing)
@@ -656,6 +735,77 @@ class BinanceService {
     } catch (error) {
       console.error('[BinanceService] Error deleting listen key:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Check if BNB is being used for trading fees (25% discount)
+   */
+  async isUsingBNBForFees(): Promise<boolean> {
+    try {
+      const response = await this.signedRequest('GET', '/sapi/v1/bnbBurn', {});
+      return (response as any).spotBNBBurn === true;
+    } catch (error) {
+      console.warn('[BinanceService] Could not check BNB burn status:', error);
+      return false; // Assume not using BNB if API fails
+    }
+  }
+
+  /**
+   * Get actual trading fee for a symbol (accounting for BNB discount)
+   */
+  async getActualFee(symbol: string): Promise<number> {
+    const baseFee = 0.001; // 0.1% default Binance.US fee
+    
+    try {
+      // Check if using BNB for fees
+      const usingBNB = await this.isUsingBNBForFees();
+      
+      if (usingBNB) {
+        // Get BNB balance
+        const accountInfo = await this.getAccountInfo();
+        const bnbBalance = accountInfo.balances.find(b => b.asset === 'BNB');
+        const bnbAmount = bnbBalance ? parseFloat(bnbBalance.free) : 0;
+        
+        // If we have BNB, apply 25% discount
+        if (bnbAmount > 0.001) { // Minimum BNB to cover fees
+          console.log(`[BinanceService] BNB fee discount active (${bnbAmount} BNB available)`);
+          return baseFee * 0.75; // 25% discount = 0.075% fee
+        }
+      }
+      
+      return baseFee;
+    } catch (error) {
+      console.warn('[BinanceService] Error calculating actual fee, using base fee:', error);
+      return baseFee;
+    }
+  }
+
+  /**
+   * Get balance for a specific asset (with caching)
+   */
+  async getBalance(asset: string): Promise<number> {
+    // Check cache first
+    const cached = this.balanceCache.get(asset);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < this.BALANCE_CACHE_TTL) {
+      return cached.balance;
+    }
+    
+    // Cache miss - fetch from API
+    try {
+      const accountInfo = await this.getAccountInfo();
+      const assetBalance = accountInfo.balances.find(b => b.asset === asset);
+      const balance = assetBalance ? parseFloat(assetBalance.free) : 0;
+      
+      // Update cache
+      this.balanceCache.set(asset, { balance, timestamp: now });
+      
+      return balance;
+    } catch (error) {
+      console.error(`[BinanceService] Error fetching balance for ${asset}:`, error);
+      return 0;
     }
   }
 }
