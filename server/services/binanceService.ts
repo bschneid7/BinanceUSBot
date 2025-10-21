@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
+import webSocketService from './webSocketService';
 
 interface BinanceTickerData {
   symbol: string;
@@ -657,10 +658,18 @@ class BinanceService {
   }
 
   /**
-   * Get current ticker price for a symbol (with caching)
+   * Get current ticker price for a symbol (with WebSocket + caching)
    */
   async getTickerPrice(symbol: string): Promise<{ symbol: string; price: string } | null> {
-    // Check cache first
+    // Try WebSocket first (real-time, no API call)
+    if (webSocketService.isConnected()) {
+      const wsPrice = webSocketService.getLatestPrice(symbol);
+      if (wsPrice !== null) {
+        return { symbol, price: wsPrice.toString() };
+      }
+    }
+    
+    // Fallback to cache
     const cached = this.priceCache.get(symbol);
     const now = Date.now();
     
@@ -669,7 +678,7 @@ class BinanceService {
       return { symbol, price: cached.price.toString() };
     }
     
-    // Cache miss - fetch from API
+    // Last resort - fetch from REST API
     try {
       const response = await this.client.get('/api/v3/ticker/price', {
         params: { symbol },

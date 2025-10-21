@@ -29,6 +29,7 @@
     "@anthropic-ai/sdk": "^0.27.3",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-node": "^4.22.0",
+    "@types/ws": "^8.18.1",
     "axios": "^1.7.7",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.2",
@@ -46,7 +47,8 @@
     "mongoose": "^8.1.1",
     "openai": "^4.63.0",
     "pino": "^9.5.0",
-    "shared": "file:../shared"
+    "shared": "file:../shared",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

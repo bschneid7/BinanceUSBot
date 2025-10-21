@@ -64,9 +64,15 @@ export class ExecutionRouter {
       }
 
       // Validate signal prices
-      if (signal.entryPrice <= 0 || signal.stopPrice <= 0) {
-        logger.error(`[ExecutionRouter] Invalid signal prices: entry=${signal.entryPrice}, stop=${signal.stopPrice}`);
-        return { success: false, error: 'Invalid signal prices (must be > 0)' };
+      if (signal.entryPrice <= 0) {
+        logger.error(`[ExecutionRouter] Invalid entry price: ${signal.entryPrice}`);
+        return { success: false, error: 'Invalid entry price (must be > 0)' };
+      }
+      
+      // Stop price is only required for new positions (not for closing)
+      if (!positionId && signal.stopPrice <= 0) {
+        logger.error(`[ExecutionRouter] Invalid stop price for new position: ${signal.stopPrice}`);
+        return { success: false, error: 'Stop price required for new positions (must be > 0)' };
       }
       
       if (signal.entryPrice > 1000000) {

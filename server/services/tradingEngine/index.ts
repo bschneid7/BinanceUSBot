@@ -15,6 +15,7 @@ import lossLimitService from '../lossLimitService';
 import positionReconciliationService from '../positionReconciliationService';
 import exchangeInfoCache from '../exchangeInfoCache';
 import userDataStream from './userDataStream';
+import webSocketService from '../webSocketService';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -82,6 +83,29 @@ export class TradingEngine {
       } catch (error) {
         logger.error('[TradingEngine] Failed to start User Data Stream:', error);
         logger.warn('[TradingEngine] Continuing without real-time updates (will use polling)');
+      }
+
+      // Start WebSocket service for real-time price updates
+      logger.info('[TradingEngine] Starting WebSocket price streaming...');
+      try {
+        // Subscribe to all configured trading pairs
+        const tradingPairs = config?.scanner?.pairs || [];
+        
+        // Connect WebSocket
+        await webSocketService.connect();
+        
+        // Subscribe to each pair
+        tradingPairs.forEach(pair => {
+          webSocketService.subscribe(pair, (update) => {
+            // Price updates are automatically cached in webSocketService
+            // No action needed here - services will query latest prices
+          });
+        });
+        
+        logger.info(`[TradingEngine] WebSocket streaming active for ${tradingPairs.length} pairs`);
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to start WebSocket streaming:', error);
+        logger.warn('[TradingEngine] Continuing with REST API polling');
       }
 
       // Start self-scheduling scan loop (prevents overlaps)
