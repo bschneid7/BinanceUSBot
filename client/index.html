@@ -9,6 +9,9 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
+    <!-- Content Security Policy: Allow service workers and blob URLs -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.binance.us; img-src 'self' data: https:;" />
+    
     <title>BinanceUSBot</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   </head>
