@@ -17,6 +17,7 @@ import engineRoutes from './routes/engineRoutes';
 import ppoRoutes from './routes/ppoRoutes';
 import mlRoutes from './routes/mlRoutes';
 import mlMetricsRoutes from './routes/mlMetricsRoutes';
+import manualTradeRoutes from './routes/manualTradeRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
@@ -98,6 +99,8 @@ app.use('/api/ppo', ppoRoutes);
 app.use('/api/ml', mlRoutes);
 // ML Metrics Routes
 app.use('/api/ml-metrics', mlMetricsRoutes);
+// Manual Trade Routes
+app.use('/api/manual-trade', manualTradeRoutes);
 
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {
