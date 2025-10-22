@@ -5,8 +5,22 @@ import { defineConfig } from "vite"
 export default defineConfig({
   plugins: [react()],
   build: {
+    // Ensure unique file names for cache busting
+    assetsDir: 'assets',
+    sourcemap: false,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    },
     rollupOptions: {
       output: {
+        // Use content hash for cache busting - ensures files change when content changes
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
           // Vendor chunks
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
@@ -48,3 +62,4 @@ export default defineConfig({
     }
   },
 })
+
