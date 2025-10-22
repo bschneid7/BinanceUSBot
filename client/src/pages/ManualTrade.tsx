@@ -52,8 +52,8 @@ export default function ManualTrade() {
         return;
       }
       try {
-        const response = await api.get(`/bot/ticker/${selectedSymbol}`);
-        setCurrentPrice(response.data.price);
+        const response = await api.get(`/manual-trade/market-data/${selectedSymbol}`);
+        setCurrentPrice(response.data.currentPrice);
       } catch (error) {
         console.error('Error fetching price:', error);
         setCurrentPrice(null);
