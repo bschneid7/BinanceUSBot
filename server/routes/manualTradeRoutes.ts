@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireUser } from './middlewares/auth';
+import { cacheMiddleware, invalidateCache } from '../middleware/cacheMiddleware';
 
 const requireAuth = requireUser();
 import binanceService from '../services/binanceService';
@@ -15,7 +16,10 @@ const router = Router();
  * GET /api/manual-trade/market-data
  * Get current market data for a symbol
  */
-router.get('/market-data/:symbol', requireAuth, async (req: Request, res: Response) => {
+router.get('/market-data/:symbol', requireAuth, cacheMiddleware({
+  ttl: 10, // Cache for 10 seconds
+  keyGenerator: (req) => `market-data:${req.params.symbol}`,
+}), async (req: Request, res: Response) => {
   try {
     const { symbol } = req.params;
     const userId = (req as any).user._id;
@@ -200,6 +204,9 @@ router.post('/place-order', requireAuth, async (req: Request, res: Response) => 
         }
       }
 
+      // Invalidate market data cache for this symbol
+      invalidateCache(`market-data:${symbol}`);
+      
       logger.info({ orderId: order._id, exchangeOrderId: order.exchangeOrderId, status: order.status }, 
         'Manual order placed successfully');
 
@@ -370,7 +377,10 @@ router.post('/close-position/:positionId', requireAuth, async (req: Request, res
  * GET /api/manual-trade/available-symbols
  * Get list of tradeable symbols on Binance.US
  */
-router.get('/available-symbols', requireAuth, async (req: Request, res: Response) => {
+router.get('/available-symbols', requireAuth, cacheMiddleware({
+  ttl: 86400, // Cache for 24 hours
+  keyGenerator: () => 'available-symbols',
+}), async (req: Request, res: Response) => {
   try {
     const exchangeInfo = await binanceService.getExchangeInfo();
     
@@ -387,6 +397,20 @@ router.get('/available-symbols', requireAuth, async (req: Request, res: Response
     res.json({ symbols });
   } catch (error: any) {
     logger.error({ error: error.message }, 'Error fetching available symbols');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/manual-trade/cache-stats
+ * Get cache statistics (for monitoring)
+ */
+router.get('/cache-stats', requireAuth, async (req: Request, res: Response) => {  try {
+    const { getCacheStats } = require('../middleware/cacheMiddleware');
+    const stats = getCacheStats();
+    res.json(stats);
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Error fetching cache stats');
     res.status(500).json({ error: error.message });
   }
 });
