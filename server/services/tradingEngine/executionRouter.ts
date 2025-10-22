@@ -4,6 +4,7 @@ import binanceService from '../binanceService';
 import Order from '../../models/Order';
 import Lot from '../../models/Lot';
 import BotConfig from '../../models/BotConfig';
+import BotState from '../../models/BotState';
 import { TradingSignal } from './signalGenerator';
 import riskEngine from './riskEngine';
 import makerFirstExecution from '../makerFirstExecution';

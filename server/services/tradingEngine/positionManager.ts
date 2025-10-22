@@ -65,9 +65,20 @@ export class PositionManager {
       const unrealizedPnl = priceDiff * position.quantity;
 
       // Calculate unrealized R
-      const state = await BotState.findOne({ userId: position.userId });
+      let state = null;
+      try {
+        state = await BotState.findOne({ userId: position.userId });
+      } catch (error) {
+        console.warn(`[PositionManager] Could not fetch BotState for position ${positionId}: ${error}`);
+      }
       if (!state || !state.currentR || state.currentR <= 0) {
-        console.warn(`[PositionManager] Invalid currentR for position ${positionId}`);
+        console.warn(`[PositionManager] Invalid currentR for position ${positionId}, using default`);
+        // Use default R value and continue instead of returning
+        const unrealizedR = unrealizedPnl / 42; // Default R
+        position.unrealized_pnl = Math.round(unrealizedPnl * 100) / 100;
+        position.unrealized_r = Math.round(unrealizedR * 100) / 100;
+        position.current_price = currentPrice;
+        await position.save();
         return;
       }
       const unrealizedR = unrealizedPnl / state.currentR;
@@ -340,8 +351,14 @@ export class PositionManager {
       const realizedPnl = priceDiff * position.quantity - (result.fees || 0);
 
       // Calculate realized R
-      const state = await BotState.findOne({ userId: position.userId });
-      const currentR = state?.currentR || 42;
+      let state = null;
+      let currentR = 42; // Default fallback
+      try {
+        state = await BotState.findOne({ userId: position.userId });
+        currentR = state?.currentR || 42;
+      } catch (error) {
+        console.warn(`[PositionManager] Could not fetch BotState, using default R value: ${error}`);
+      }
       const realizedR = currentR > 0 ? realizedPnl / currentR : 0;
 
       // Update position
