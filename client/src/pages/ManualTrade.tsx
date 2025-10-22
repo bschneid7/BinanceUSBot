@@ -36,12 +36,31 @@ export default function ManualTrade() {
   const [selectedSymbol, setSelectedSymbol] = useState('');
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET');
-  const [quantity, setQuantity] = useState('');
+  const [quantity, setQuantity] = useState(''); // This will now be USD amount
   const [price, setPrice] = useState('');
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Fetch current price when symbol changes
+  useEffect(() => {
+    const fetchPrice = async () => {
+      if (!selectedSymbol) {
+        setCurrentPrice(null);
+        return;
+      }
+      try {
+        const response = await api.get(`/bot/ticker/${selectedSymbol}`);
+        setCurrentPrice(response.data.price);
+      } catch (error) {
+        console.error('Error fetching price:', error);
+        setCurrentPrice(null);
+      }
+    };
+    fetchPrice();
+  }, [selectedSymbol]);
 
   const loadData = async () => {
     setLoading(true);
@@ -88,11 +107,27 @@ export default function ManualTrade() {
 
     setSubmitting(true);
     try {
+      // Convert USD amount to coin quantity
+      const usdAmount = parseFloat(quantity);
+      let coinQuantity: number;
+      
+      if (orderType === 'MARKET') {
+        // For market orders, use current price
+        if (!currentPrice) {
+          throw new Error('Unable to fetch current price');
+        }
+        coinQuantity = usdAmount / currentPrice;
+      } else {
+        // For limit orders, use the specified limit price
+        const limitPrice = parseFloat(price);
+        coinQuantity = usdAmount / limitPrice;
+      }
+
       const orderData: any = {
         symbol: selectedSymbol,
         side,
         type: orderType,
-        quantity: parseFloat(quantity)
+        quantity: coinQuantity
       };
 
       if (orderType === 'LIMIT') {
@@ -103,7 +138,7 @@ export default function ManualTrade() {
 
       toast({
         title: 'Order Placed Successfully',
-        description: `${side} ${quantity} ${selectedSymbol} at ${orderType === 'MARKET' ? 'market price' : `$${price}`}`,
+        description: `${side} $${quantity} of ${selectedSymbol} (${coinQuantity.toFixed(8)} coins) at ${orderType === 'MARKET' ? 'market price' : `$${price}`}`,
       });
 
       // Reset form
@@ -228,9 +263,16 @@ export default function ManualTrade() {
                 </Select>
               </div>
 
-              {/* Quantity */}
+              {/* Quantity (USD Amount) */}
               <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity</Label>
+                <Label htmlFor="quantity">
+                  Amount (USD)
+                  {currentPrice && selectedSymbol && (
+                    <span className="text-xs text-muted-foreground ml-2">
+                      Current price: ${currentPrice.toFixed(2)}
+                    </span>
+                  )}
+                </Label>
                 <Input
                   id="quantity"
                   type="number"
@@ -240,6 +282,11 @@ export default function ManualTrade() {
                   onChange={(e) => setQuantity(e.target.value)}
                   required
                 />
+                {quantity && currentPrice && (
+                  <p className="text-xs text-muted-foreground">
+                    ≈ {(parseFloat(quantity) / currentPrice).toFixed(8)} {selectedSymbol.replace('USD', '')}
+                  </p>
+                )}
               </div>
 
               {/* Price (for limit orders) */}
