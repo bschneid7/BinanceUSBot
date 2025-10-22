@@ -125,6 +125,10 @@ export default function ManualTrade() {
         coinQuantity = usdAmount / limitPrice;
       }
 
+      // Round quantity to 5 decimal places to match Binance step size (0.00001)
+      // This prevents LOT_SIZE filter violations
+      coinQuantity = Math.floor(coinQuantity / 0.00001) * 0.00001;
+      
       console.log('Calculated coin quantity:', coinQuantity, 'from USD:', usdAmount);
 
       const orderData: any = {
@@ -157,9 +161,10 @@ export default function ManualTrade() {
       await loadData();
     } catch (error: any) {
       console.error('Error placing order:', error);
+      const errorMessage = error.response?.data?.details || error.response?.data?.error || error.message || 'Failed to place order';
       toast({
         title: 'Order Failed',
-        description: error.response?.data?.error || error.message || 'Failed to place order',
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
