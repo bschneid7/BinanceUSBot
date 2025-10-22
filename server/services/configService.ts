@@ -74,6 +74,38 @@ export const updateUserConfig = async (
       }
     }
 
+    // Enhanced validation for playbook parameters
+    if (updates.playbook_a) {
+      const { playbook_a } = updates;
+      if (playbook_a.entry?.rsi_threshold !== undefined) {
+        const rsi = playbook_a.entry.rsi_threshold;
+        if (rsi < 10 || rsi > 90) {
+          throw new Error('Playbook A RSI threshold must be between 10 and 90');
+        }
+      }
+      if (playbook_a.exit?.profit_target_R !== undefined) {
+        const target = playbook_a.exit.profit_target_R;
+        if (target < 0.5 || target > 10) {
+          throw new Error('Playbook A profit target must be between 0.5R and 10R');
+        }
+      }
+      if (playbook_a.exit?.stop_loss_R !== undefined) {
+        const stop = playbook_a.exit.stop_loss_R;
+        if (stop < 0.5 || stop > 3) {
+          throw new Error('Playbook A stop loss must be between 0.5R and 3R');
+        }
+      }
+    }
+
+    // Cross-field validation
+    if (updates.risk && updates.reserve) {
+      const maxExposure = updates.risk.max_exposure_pct || 0.7;
+      const reserveTarget = updates.reserve.target_pct || 0.3;
+      if (maxExposure + reserveTarget > 1.0) {
+        throw new Error('max_exposure_pct + reserve target_pct cannot exceed 100%');
+      }
+    }
+
     // Find and update the config
     const config = await BotConfig.findOneAndUpdate(
       { userId },

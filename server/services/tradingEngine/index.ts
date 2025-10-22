@@ -282,14 +282,17 @@ export class TradingEngine {
       logger.info(`[TradingEngine] Generated ${signals.length} signals`);
 
       // Step 6: Process signals
-      for (const signal of signals) {
-        try {
-          await this.processSignal(userId, signal);
-        } catch (error) {
-          logger.error(`[TradingEngine] Failed to process signal for ${signal.symbol}:`, error);
-          // Continue processing other signals
+      // Process signals in parallel for better performance
+      const results = await Promise.allSettled(
+        signals.map(signal => this.processSignal(userId, signal))
+      );
+      
+      // Log any failures
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          logger.error({ signal: signals[index], error: result.reason }, 'Signal processing failed');
         }
-      }
+      });
 
       logger.info('[TradingEngine] ===== Scan Cycle Complete =====');
     } catch (error) {

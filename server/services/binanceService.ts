@@ -293,20 +293,24 @@ class BinanceService {
    * Get 24hr ticker data for a symbol
    */
   async getTicker(symbol: string): Promise<BinanceTickerData> {
-    try {
-      const response = await this.client.get('/api/v3/ticker/24hr', {
-        params: { symbol },
-      });
-      return response.data as BinanceTickerData;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error(
-          `[BinanceService] Error fetching ticker for ${symbol}:`,
-          error.response?.data || error.message
-        );
+    return await this.retryWithBackoff(async () => {
+      try {
+        const response = await this.client.get('/api/v3/ticker/24hr', {
+          params: { symbol },
+        });
+        return response.data as BinanceTickerData;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
+          const errorType = status ? (status >= 500 ? '5xx Server' : status >= 400 ? '4xx Client' : 'Network') : 'Timeout';
+          console.error(
+            `[BinanceService] [${errorType}] getTicker(${symbol}) failed:`,
+            error.response?.data || error.message
+          );
+        }
+        throw error;
       }
-      throw error;
-    }
+    }, `getTicker(${symbol})`);
   }
 
   /**
@@ -317,28 +321,32 @@ class BinanceService {
     interval: string,
     limit: number = 100
   ): Promise<BinanceKlineData[]> {
-    try {
-      const response = await this.client.get('/api/v3/klines', {
-        params: { symbol, interval, limit },
-      });
-      return response.data.map((kline: unknown[]) => ({
-        openTime: kline[0],
-        open: kline[1],
-        high: kline[2],
-        low: kline[3],
-        close: kline[4],
-        volume: kline[5],
-        closeTime: kline[6],
-      }));
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error(
-          `[BinanceService] Error fetching klines for ${symbol}:`,
-          error.response?.data || error.message
-        );
+    return await this.retryWithBackoff(async () => {
+      try {
+        const response = await this.client.get('/api/v3/klines', {
+          params: { symbol, interval, limit },
+        });
+        return response.data.map((kline: unknown[]) => ({
+          openTime: kline[0],
+          open: kline[1],
+          high: kline[2],
+          low: kline[3],
+          close: kline[4],
+          volume: kline[5],
+          closeTime: kline[6],
+        }));
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
+          const errorType = status ? (status >= 500 ? '5xx Server' : status >= 400 ? '4xx Client' : 'Network') : 'Timeout';
+          console.error(
+            `[BinanceService] [${errorType}] getKlines(${symbol}, ${interval}) failed:`,
+            error.response?.data || error.message
+          );
+        }
+        throw error;
       }
-      throw error;
-    }
+    }, `getKlines(${symbol}, ${interval})`);
   }
 
   /**
@@ -348,20 +356,24 @@ class BinanceService {
     bids: Array<[string, string]>;
     asks: Array<[string, string]>;
   }> {
-    try {
-      const response = await this.client.get('/api/v3/depth', {
-        params: { symbol, limit },
-      });
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error(
-          `[BinanceService] Error fetching order book for ${symbol}:`,
-          error.response?.data || error.message
-        );
+    return await this.retryWithBackoff(async () => {
+      try {
+        const response = await this.client.get('/api/v3/depth', {
+          params: { symbol, limit },
+        });
+        return response.data;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
+          const errorType = status ? (status >= 500 ? '5xx Server' : status >= 400 ? '4xx Client' : 'Network') : 'Timeout';
+          console.error(
+            `[BinanceService] [${errorType}] getOrderBookDepth(${symbol}) failed:`,
+            error.response?.data || error.message
+          );
+        }
+        throw error;
       }
-      throw error;
-    }
+    }, `getOrderBookDepth(${symbol})`);
   }
 
   /**
