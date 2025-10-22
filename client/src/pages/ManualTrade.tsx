@@ -87,6 +87,8 @@ export default function ManualTrade() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Form submitted with:', { selectedSymbol, side, quantity, orderType, price, currentPrice });
+    
     if (!selectedSymbol || !quantity) {
       toast({
         title: 'Validation Error',
@@ -114,7 +116,7 @@ export default function ManualTrade() {
       if (orderType === 'MARKET') {
         // For market orders, use current price
         if (!currentPrice) {
-          throw new Error('Unable to fetch current price');
+          throw new Error('Unable to fetch current price. Please select a symbol and wait for price to load.');
         }
         coinQuantity = usdAmount / currentPrice;
       } else {
@@ -122,6 +124,8 @@ export default function ManualTrade() {
         const limitPrice = parseFloat(price);
         coinQuantity = usdAmount / limitPrice;
       }
+
+      console.log('Calculated coin quantity:', coinQuantity, 'from USD:', usdAmount);
 
       const orderData: any = {
         symbol: selectedSymbol,
@@ -134,7 +138,11 @@ export default function ManualTrade() {
         orderData.price = parseFloat(price);
       }
 
+      console.log('Submitting order:', orderData);
+
       const response = await api.post('/manual-trade/place-order', orderData);
+
+      console.log('Order response:', response.data);
 
       toast({
         title: 'Order Placed Successfully',
@@ -231,8 +239,11 @@ export default function ManualTrade() {
                   <Button
                     type="button"
                     variant={side === 'BUY' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setSide('BUY')}
+                    className={`flex-1 ${side === 'BUY' ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                    onClick={() => {
+                      console.log('BUY button clicked');
+                      setSide('BUY');
+                    }}
                   >
                     <TrendingUp className="mr-2 h-4 w-4" />
                     Buy
@@ -240,13 +251,19 @@ export default function ManualTrade() {
                   <Button
                     type="button"
                     variant={side === 'SELL' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setSide('SELL')}
+                    className={`flex-1 ${side === 'SELL' ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                    onClick={() => {
+                      console.log('SELL button clicked');
+                      setSide('SELL');
+                    }}
                   >
                     <TrendingDown className="mr-2 h-4 w-4" />
                     Sell
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Selected: <span className="font-semibold">{side}</span>
+                </p>
               </div>
 
               {/* Order Type */}
@@ -308,11 +325,14 @@ export default function ManualTrade() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full"
-                disabled={submitting || loading}
+                className={`w-full ${side === 'BUY' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                disabled={submitting || loading || !selectedSymbol || !currentPrice}
               >
                 {submitting ? 'Placing Order...' : `Place ${side} Order`}
               </Button>
+              {!currentPrice && selectedSymbol && (
+                <p className="text-xs text-yellow-600">Waiting for price data...</p>
+              )}
             </form>
           </CardContent>
         </Card>
@@ -371,6 +391,7 @@ export default function ManualTrade() {
           <p>• <strong>Limit Orders:</strong> Execute only at your specified price or better</p>
           <p>• <strong>Quick Close:</strong> Closes positions using market orders for immediate execution</p>
           <p>• <strong>Fees:</strong> All orders are subject to Binance.US trading fees</p>
+          <p>• <strong>USD Input:</strong> Enter amounts in USD - the system automatically converts to coin quantity</p>
           <p className="text-yellow-600 dark:text-yellow-500">
             ⚠️ <strong>Warning:</strong> Manual trades bypass the bot's risk management. Trade carefully!
           </p>
