@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle, Brain } from 'lucide-react';
+import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle, Brain, Hand } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -8,6 +8,7 @@ const navigation = [
   { name: 'Trade History', href: '/trades', icon: History },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'ML Dashboard', href: '/ml', icon: Brain },
+  { name: 'Manual Trade', href: '/manual-trade', icon: Hand },
   { name: 'Configuration', href: '/config', icon: Settings },
   { name: 'Account', href: '/account', icon: Settings },
   { name: 'Tax Reports', href: '/tax', icon: FileText },
@@ -43,3 +44,4 @@ export function Sidebar() {
     </div>
   );
 }
+

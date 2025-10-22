@@ -20,6 +20,7 @@ const Account = lazy(() => import('./pages/Account').then(m => ({ default: m.Acc
 const TaxReports = lazy(() => import('./pages/TaxReports').then(m => ({ default: m.TaxReports })));
 const Controls = lazy(() => import('./pages/Controls').then(m => ({ default: m.Controls })));
 const MLDashboard = lazy(() => import('./pages/MLDashboard'));
+const ManualTrade = lazy(() => import('./pages/ManualTrade'));
 const BlankPage = lazy(() => import('./pages/BlankPage').then(m => ({ default: m.BlankPage })));
 
 // Loading fallback component
@@ -55,6 +56,7 @@ function App() {
                 <Route path="tax" element={<TaxReports />} />
                 <Route path="controls" element={<Controls />} />
                 <Route path="ml" element={<MLDashboard />} />
+                <Route path="manual-trade" element={<ManualTrade />} />
               </Route>
               <Route path="*" element={<BlankPage />} />
             </Routes>
