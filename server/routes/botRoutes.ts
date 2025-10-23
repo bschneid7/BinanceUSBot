@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireUser } from './middlewares/auth';
 import botStatusService from '../services/botStatusService';
 import botControlService from '../services/botControlService';
+import { cacheMiddleware } from '../middleware/cacheMiddleware';
 
 const router = Router();
 
@@ -21,7 +22,10 @@ const router = Router();
 //   totalOpenRiskR: number,
 //   totalExposurePct: number
 // }
-router.get('/status', requireUser(), async (req: Request, res: Response) => {
+router.get('/status', requireUser(), cacheMiddleware({
+  ttl: 5, // Cache for 5 seconds (real-time data)
+  keyGenerator: (req) => `bot:status:${req.user._id}`,
+}), async (req: Request, res: Response) => {
   try {
     console.log(`[BotRoutes] GET /api/bot/status - User: ${req.user._id}`);
 
@@ -48,7 +52,10 @@ router.get('/status', requireUser(), async (req: Request, res: Response) => {
 //   activePositions: Position[],
 //   systemAlerts: Alert[]
 // }
-router.get('/overview', requireUser(), async (req: Request, res: Response) => {
+router.get('/overview', requireUser(), cacheMiddleware({
+  ttl: 10, // Cache for 10 seconds
+  keyGenerator: (req) => `bot:overview:${req.user._id}`,
+}), async (req: Request, res: Response) => {
   try {
     console.log(`[BotRoutes] GET /api/bot/overview - User: ${req.user._id}`);
 

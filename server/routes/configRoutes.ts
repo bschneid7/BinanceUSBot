@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { requireUser } from './middlewares/auth';
 import * as ConfigService from '../services/configService';
+import { cacheMiddleware, invalidateCache } from '../middleware/cacheMiddleware';
 
 const router = express.Router();
 
@@ -8,7 +9,10 @@ const router = express.Router();
 // Endpoint: GET /api/config
 // Request: {}
 // Response: { config: BotConfig }
-router.get('/', requireUser(), async (req: Request, res: Response) => {
+router.get('/', requireUser(), cacheMiddleware({
+  ttl: 300, // Cache for 5 minutes
+  keyGenerator: (req) => `config:${req.user._id}`,
+}), async (req: Request, res: Response) => {
   try {
     console.log(`[GET /api/config] Fetching config for user: ${req.user._id}`);
 
@@ -58,6 +62,9 @@ router.put('/', requireUser(), async (req: Request, res: Response) => {
     // Update the config
     const config = await ConfigService.updateUserConfig(req.user._id, req.body);
 
+    // Invalidate config cache for this user
+    invalidateCache(`config:${req.user._id}`);
+    
     console.log(`[PUT /api/config] Config updated successfully for user: ${req.user._id}`);
     res.status(200).json({
       success: true,

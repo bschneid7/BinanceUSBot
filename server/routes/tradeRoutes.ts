@@ -1,6 +1,7 @@
 import express from 'express';
 import { requireUser } from './middlewares/auth';
 import TradeService from '../services/tradeService';
+import { cacheMiddleware } from '../middleware/cacheMiddleware';
 
 const router = express.Router();
 
@@ -8,7 +9,13 @@ const router = express.Router();
 // Endpoint: GET /api/trades/history
 // Request: { startDate?: string, endDate?: string, playbook?: string, outcome?: string, symbol?: string }
 // Response: { trades: Trade[] }
-router.get('/history', requireUser(), async (req, res) => {
+router.get('/history', requireUser(), cacheMiddleware({
+  ttl: 30, // Cache for 30 seconds
+  keyGenerator: (req) => {
+    const params = new URLSearchParams(req.query as any).toString();
+    return `trades:history:${req.user._id}:${params}`;
+  },
+}), async (req, res) => {
   try {
     console.log('[GET /api/trades/history] Request from user:', req.user._id);
 
@@ -71,7 +78,10 @@ router.get('/:id', requireUser(), async (req, res) => {
 // Endpoint: GET /api/trades/stats
 // Request: {}
 // Response: { stats: TradeStatistics }
-router.get('/stats/summary', requireUser(), async (req, res) => {
+router.get('/stats/summary', requireUser(), cacheMiddleware({
+  ttl: 60, // Cache for 1 minute
+  keyGenerator: (req) => `trades:stats:${req.user._id}`,
+}), async (req, res) => {
   try {
     console.log('[GET /api/trades/stats] Request from user:', req.user._id);
 

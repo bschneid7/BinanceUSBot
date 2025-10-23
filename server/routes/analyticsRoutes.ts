@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { requireUser } from './middlewares/auth';
 import analyticsService from '../services/analyticsService';
+import { cacheMiddleware } from '../middleware/cacheMiddleware';
 
 const router = express.Router();
 
@@ -8,7 +9,10 @@ const router = express.Router();
 // Endpoint: GET /api/analytics/performance
 // Request: {}
 // Response: { metrics: PerformanceMetrics }
-router.get('/performance', requireUser(), async (req: Request, res: Response) => {
+router.get('/performance', requireUser(), cacheMiddleware({
+  ttl: 60, // Cache for 1 minute
+  keyGenerator: (req) => `analytics:performance:${req.user._id}`,
+}), async (req: Request, res: Response) => {
   try {
     console.log(`[AnalyticsRoutes] GET /performance - User: ${req.user?._id}`);
 
@@ -37,7 +41,10 @@ router.get('/performance', requireUser(), async (req: Request, res: Response) =>
 // Endpoint: GET /api/analytics/equity-curve
 // Request: { days?: number }
 // Response: { data: Array<{ date: string, equity: number }> }
-router.get('/equity-curve', requireUser(), async (req: Request, res: Response) => {
+router.get('/equity-curve', requireUser(), cacheMiddleware({
+  ttl: 300, // Cache for 5 minutes
+  keyGenerator: (req) => `analytics:equity-curve:${req.user._id}:${req.query.days || 30}`,
+}), async (req: Request, res: Response) => {
   try {
     const days = req.query.days ? parseInt(req.query.days as string, 10) : 30;
 

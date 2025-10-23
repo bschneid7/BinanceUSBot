@@ -204,8 +204,13 @@ router.post('/place-order', requireAuth, async (req: Request, res: Response) => 
         }
       }
 
-      // Invalidate market data cache for this symbol
+      // Invalidate relevant caches after order placement
       invalidateCache(`market-data:${symbol}`);
+      invalidateCache(`bot:status:${userId}`);
+      invalidateCache(`bot:overview:${userId}`);
+      invalidateCache(`analytics:performance:${userId}`);
+      invalidateCache(`trades:`);
+      // Note: equity-curve cache will auto-expire in 5 minutes
       
       logger.info({ orderId: order._id, exchangeOrderId: order.exchangeOrderId, status: order.status }, 
         'Manual order placed successfully');
