@@ -100,7 +100,7 @@ router.post('/place-order', requireAuth, async (req: Request, res: Response) => 
 
     // Submit order to Binance
     try {
-      const binanceOrder = await binanceService.submitOrder({
+      const binanceOrder = await binanceService.placeOrder({
         symbol,
         side,
         type: orderType,
@@ -292,7 +292,7 @@ router.post('/close-position/:positionId', requireAuth, async (req: Request, res
     });
 
     try {
-      const binanceOrder = await binanceService.submitOrder({
+      const binanceOrder = await binanceService.placeOrder({
         symbol: position.symbol,
         side: 'SELL',
         type: 'MARKET',
