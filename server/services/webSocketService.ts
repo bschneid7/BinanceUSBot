@@ -63,12 +63,12 @@ export class WebSocketService {
           const message = JSON.parse(data.toString());
           this.handleMessage(message);
         } catch (error) {
-          logger.error('[WebSocketService] Error parsing message:', error);
+          logger.error({ err: error }, '[WebSocketService] Error parsing message');
         }
       });
 
       this.ws.on('error', (error) => {
-        logger.error('[WebSocketService] WebSocket error:', error);
+        logger.error({ err: error }, '[WebSocketService] WebSocket error');
         this.isConnecting = false;
       });
 
@@ -80,7 +80,7 @@ export class WebSocketService {
       });
 
     } catch (error) {
-      logger.error('[WebSocketService] Connection failed:', error);
+      logger.error({ err: error }, '[WebSocketService] Connection failed');
       this.isConnecting = false;
       this.attemptReconnect();
     }
@@ -113,7 +113,7 @@ export class WebSocketService {
             try {
               callback(update);
             } catch (error) {
-              logger.error(`[WebSocketService] Error in price callback for ${symbol}:`, error);
+              logger.error({ err: error, symbol }, '[WebSocketService] Error in price callback');
             }
           });
         }

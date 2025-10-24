@@ -68,7 +68,7 @@ const autoStartTradingEngine = async (): Promise<void> => {
     for (const user of users) {
       try {
         console.log(`[AutoStart] Starting trading engine for user ${user._id}...`);
-        await tradingEngine.start(user._id);
+        await tradingEngine.start(user._id as Types.ObjectId);
         console.log(`[AutoStart] ✓ Trading engine started for user ${user._id}`);
       } catch (error) {
         console.error(`[AutoStart] Failed to start trading engine for user ${user._id}:`, error);

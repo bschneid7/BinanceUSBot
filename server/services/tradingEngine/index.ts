@@ -16,6 +16,7 @@ import positionReconciliationService from '../positionReconciliationService';
 import exchangeInfoCache from '../exchangeInfoCache';
 import userDataStream from './userDataStream';
 import webSocketService from '../webSocketService';
+import gridTradingService from './gridTrading';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -108,6 +109,16 @@ export class TradingEngine {
         logger.warn('[TradingEngine] Continuing with REST API polling');
       }
 
+      // Start Grid Trading service
+      logger.info('[TradingEngine] Starting Grid Trading service...');
+      try {
+        await gridTradingService.start();
+        logger.info('[TradingEngine] Grid Trading service started successfully');
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to start Grid Trading service:', error);
+        logger.warn('[TradingEngine] Continuing without Grid Trading');
+      }
+
       // Start self-scheduling scan loop (prevents overlaps)
       const scheduleNextScan = async () => {
         const userKey = userId.toString();
@@ -167,6 +178,15 @@ export class TradingEngine {
       
       // Remove from running scans
       this.runningScans.delete(userKey);
+
+      // Stop Grid Trading service
+      logger.info('[TradingEngine] Stopping Grid Trading service...');
+      try {
+        await gridTradingService.stop();
+        logger.info('[TradingEngine] Grid Trading service stopped');
+      } catch (error) {
+        logger.error('[TradingEngine] Error stopping Grid Trading service:', error);
+      }
 
       // Stop User Data Stream
       logger.info('[TradingEngine] Stopping User Data Stream...');

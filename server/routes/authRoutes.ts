@@ -31,8 +31,8 @@ router.post('/login', async (req: Request, res: Response) => {
 
     if (user) {
       console.log(`[POST /api/auth/login] User authenticated successfully: ${user._id}`);
-      const accessToken = generateAccessToken(user._id.toString());
-      const refreshToken = generateRefreshToken(user._id.toString());
+      const accessToken = generateAccessToken(String(user._id));
+      const refreshToken = generateRefreshToken(String(user._id));
 
       user.refreshToken = refreshToken;
       await user.save();
@@ -103,7 +103,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET!) as jwt.JwtPayload;
 
     // Find the user
-    const user = await UserService.get(decoded.sub);
+    const user = await UserService.get(decoded.sub || '');
 
     if (!user) {
       console.log(`[POST /api/auth/refresh] User not found for token`);
@@ -122,8 +122,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     // Generate new tokens
-    const newAccessToken = generateAccessToken(user);
-    const newRefreshToken = generateRefreshToken(user);
+    const newAccessToken = generateAccessToken(String(user._id));
+    const newRefreshToken = generateRefreshToken(String(user._id));
 
     // Update user's refresh token in database
     user.refreshToken = newRefreshToken;

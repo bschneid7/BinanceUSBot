@@ -66,6 +66,14 @@ export interface IBotConfig extends Document {
     enable: boolean;
     stop_atr_mult: number;
   };
+  gridTrading?: {
+    symbol: string;
+    lowerBound: number;
+    upperBound: number;
+    gridLevels: number;
+    orderSize: number;
+    enabled: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -326,6 +334,32 @@ const schema = new Schema<IBotConfig>({
       type: Number,
       required: true,
       default: 1.0,
+    },
+  },
+  gridTrading: {
+    symbol: {
+      type: String,
+      default: 'BTCUSDT',
+    },
+    lowerBound: {
+      type: Number,
+      default: 80000,
+    },
+    upperBound: {
+      type: Number,
+      default: 90000,
+    },
+    gridLevels: {
+      type: Number,
+      default: 20,
+    },
+    orderSize: {
+      type: Number,
+      default: 100,
+    },
+    enabled: {
+      type: Boolean,
+      default: true,
     },
   },
 }, {

@@ -307,7 +307,7 @@ export class UserDataStreamService {
         // Close position if quantity is zero
         if (position.quantity <= 0.0001) {
           position.status = 'CLOSED';
-          position.closedAt = new Date();
+          position.closed_at = new Date();
           console.log(`[UserDataStream] Position ${position.symbol} CLOSED`);
         }
       }

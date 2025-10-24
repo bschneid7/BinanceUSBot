@@ -10,7 +10,7 @@ export interface IUser extends Document {
   lastLoginAt: Date;
   isActive: boolean;
   role: RoleValues;
-  refreshToken: string;
+  refreshToken: string | null;
 }
 
 const schema = new Schema<IUser>({
@@ -55,7 +55,7 @@ const schema = new Schema<IUser>({
 });
 
 schema.set('toJSON', {
-  transform: (doc: Document, ret: Record<string, unknown>) => {
+  transform: (doc: any, ret: any) => {
     delete ret.password;
     return ret;
   },

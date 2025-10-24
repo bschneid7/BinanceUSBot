@@ -124,7 +124,7 @@ export class PositionManager {
       }
 
       // Rule 1: Move to breakeven
-      if (position.playbook === 'A' && unrealizedR >= playbookConfig.breakeven_R) {
+      if (position.playbook === 'A' && 'breakeven_R' in playbookConfig && unrealizedR >= playbookConfig.breakeven_R) {
         if (position.stop_price !== position.entry_price) {
           console.log(`[PositionManager] Moving ${position.symbol} to breakeven (${unrealizedR.toFixed(2)}R >= ${playbookConfig.breakeven_R}R)`);
           position.stop_price = position.entry_price;
@@ -133,7 +133,7 @@ export class PositionManager {
       }
 
       // Rule 2: Scale out
-      if (position.playbook === 'A' && unrealizedR >= playbookConfig.scale_R) {
+      if (position.playbook === 'A' && 'scale_R' in playbookConfig && unrealizedR >= playbookConfig.scale_R) {
         // Check if we haven't already scaled
         const scalePct = playbookConfig.scale_pct;
         const targetQty = position.quantity * (1 - scalePct);
@@ -230,11 +230,11 @@ export class PositionManager {
       }
 
       // Rule 7: Scale out (Playbook C - Stage 1)
-      if (position.playbook === 'C' && playbookConfig.scale_1_R && unrealizedR >= playbookConfig.scale_1_R) {
+      if (position.playbook === 'C' && 'scale_1_R' in playbookConfig && playbookConfig.scale_1_R && unrealizedR >= playbookConfig.scale_1_R) {
         if (!position.scaled_1) {
           console.log(`[PositionManager] Scaling out stage 1 for ${position.symbol} at ${unrealizedR.toFixed(2)}R`);
 
-          const scaleQty = position.quantity * playbookConfig.scale_1_pct;
+          const scaleQty = 'scale_1_pct' in playbookConfig ? position.quantity * playbookConfig.scale_1_pct : position.quantity * 0.5;
           const result = await executionRouter.executeSignal(
             position.userId,
             {
@@ -246,7 +246,7 @@ export class PositionManager {
               reason: 'Scale out stage 1',
             },
             scaleQty,
-            position._id
+            position._id as Types.ObjectId
           );
 
           if (result.success) {
@@ -259,11 +259,11 @@ export class PositionManager {
       }
 
       // Rule 8: Scale out (Playbook C - Stage 2)
-      if (position.playbook === 'C' && playbookConfig.scale_2_R && unrealizedR >= playbookConfig.scale_2_R) {
+      if (position.playbook === 'C' && 'scale_2_R' in playbookConfig && playbookConfig.scale_2_R && unrealizedR >= playbookConfig.scale_2_R) {
         if (!position.scaled_2 && position.scaled_1) {
           console.log(`[PositionManager] Scaling out stage 2 for ${position.symbol} at ${unrealizedR.toFixed(2)}R`);
 
-          const scaleQty = position.quantity * playbookConfig.scale_2_pct;
+          const scaleQty = 'scale_2_pct' in playbookConfig ? position.quantity * playbookConfig.scale_2_pct : position.quantity * 0.5;
           const result = await executionRouter.executeSignal(
             position.userId,
             {
@@ -275,7 +275,7 @@ export class PositionManager {
               reason: 'Scale out stage 2',
             },
             scaleQty,
-            position._id
+            position._id as Types.ObjectId
           );
 
           if (result.success) {
@@ -283,7 +283,7 @@ export class PositionManager {
             position.scaled_2 = true;
 
             // Enable trailing stop after stage 2
-            if (playbookConfig.trail_atr_mult) {
+            if ('trail_atr_mult' in playbookConfig && playbookConfig.trail_atr_mult) {
               const klines = await binanceService.getKlines(position.symbol, '15m', 15);
               const atr = binanceService.calculateATR(klines, 14);
               position.trailing_stop_distance = playbookConfig.trail_atr_mult * atr;
@@ -297,7 +297,7 @@ export class PositionManager {
       }
 
       // Rule 9: Check target hit (for Playbook C)
-      if (position.playbook === 'C' && playbookConfig.target_R && unrealizedR >= playbookConfig.target_R) {
+      if (position.playbook === 'C' && 'target_R' in playbookConfig && playbookConfig.target_R && unrealizedR >= playbookConfig.target_R) {
         console.log(`[PositionManager] Target hit for ${position.symbol}: ${unrealizedR.toFixed(2)}R >= ${playbookConfig.target_R}R`);
         await this.closePosition(positionId, 'TARGET');
       }
@@ -335,7 +335,7 @@ export class PositionManager {
           reason: `Close position - ${reason}`,
         },
         position.quantity,
-        position._id
+        position._id as Types.ObjectId
       );
 
       if (!result.success) {
@@ -448,8 +448,8 @@ export class PositionManager {
             return;
           }
 
-          await this.updatePosition(position._id, currentPrice);
-          await this.managePosition(position._id);
+          await this.updatePosition(position._id as Types.ObjectId, currentPrice);
+          await this.managePosition(position._id as Types.ObjectId);
         } catch (error) {
           console.error(`[PositionManager] Error updating position ${position._id}:`, error);
         }

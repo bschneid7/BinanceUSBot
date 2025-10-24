@@ -121,7 +121,7 @@ export class RiskEngine {
       logger.info(`[RiskEngine] APPROVED: All risk checks passed`);
       return { approved: true };
     } catch (error) {
-      logger.error('[RiskEngine] Error checking risk limits:', error);
+      logger.error({ err: error }, '[RiskEngine] Error checking risk limits');
       return {
         approved: false,
         reason: error instanceof Error ? error.message : 'Unknown error',
@@ -198,7 +198,7 @@ export class RiskEngine {
 
       await state.save();
     } catch (error) {
-      logger.error('[RiskEngine] Error updating PnL tracking:', error);
+      logger.error({ err: error }, '[RiskEngine] Error updating PnL tracking');
       throw error;
     }
   }
@@ -241,7 +241,7 @@ export class RiskEngine {
 
       return { shouldHalt: false };
     } catch (error) {
-      logger.error('[RiskEngine] Error checking kill-switch:', error);
+      logger.error({ err: error }, '[RiskEngine] Error checking kill-switch');
       return { shouldHalt: false };
     }
   }
