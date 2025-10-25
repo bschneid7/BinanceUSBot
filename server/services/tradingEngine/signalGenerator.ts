@@ -134,7 +134,10 @@ export class SignalGenerator {
       const breakoutLevel = Math.max(high20, pdh);
       const isBreakout = price >= breakoutLevel;
 
-      if (!isBreakout) return null;
+      if (!isBreakout) {
+        console.log(`[PlaybookA] ${symbol} - No breakout: Price $${price.toFixed(2)} < $${breakoutLevel.toFixed(2)}`);
+        return null;
+      }
 
       // Volume confirmation: current volume vs 20-bar average
       const recentVolumes = klines15m.slice(-20).map(k => parseFloat(k.volume));
@@ -293,6 +296,7 @@ export class SignalGenerator {
 
       // Check if impulse >= 4%
       if (largestMove < 4.0) {
+        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 4.0%`);
         return null;
       }
 
@@ -376,6 +380,7 @@ export class SignalGenerator {
 
       // Trigger: return <= -2σ (flash crash)
       if (sigmaMove > -2.0) {
+        console.log(`[PlaybookD] ${symbol} - No flash crash: ${sigmaMove.toFixed(2)}σ > -2.0σ`);
         return null;
       }
 

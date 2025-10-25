@@ -8,7 +8,7 @@ export interface IPosition extends Document {
   stop_price?: number;
   target_price?: number;
   trailing_stop_distance?: number;
-  playbook: 'A' | 'B' | 'C' | 'D' | 'GRID' | 'MANUAL';
+  playbook: 'A' | 'B' | 'C' | 'D' | 'MANUAL';
   status: 'OPEN' | 'CLOSED';
   opened_at: Date;
   closed_at?: Date;
@@ -55,7 +55,7 @@ const schema = new Schema<IPosition>({
   },
   playbook: {
     type: String,
-    enum: ['A', 'B', 'C', 'D', 'GRID', 'MANUAL'],
+    enum: ['A', 'B', 'C', 'D', 'MANUAL'],
     required: true,
     index: true,
   },

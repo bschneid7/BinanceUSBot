@@ -38,8 +38,8 @@ services:
       MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeThisPassword}@mongo:27017/${MONGO_DB_NAME:-binance_bot}?authSource=admin
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-in-production}
-      BINANCE_API_KEY: ${BINANCE_API_KEY:-}
-      BINANCE_API_SECRET: ${BINANCE_API_SECRET:-}
+      BINANCE_US_API_KEY: ${BINANCE_US_API_KEY:-}
+      BINANCE_US_API_SECRET: ${BINANCE_US_API_SECRET:-}
     ports:
       - "${APP_PORT:-3000}:3000"
     depends_on:
