@@ -1,0 +1,35 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY shared/package*.json ./shared/
+COPY server/package*.json ./server/
+COPY client/package*.json ./client/
+
+# Install all dependencies
+RUN cd shared && npm install --legacy-peer-deps
+RUN cd server && npm install --legacy-peer-deps && npm install -g tsx
+RUN cd client && npm install --legacy-peer-deps
+
+# Copy source code
+COPY shared/ ./shared/
+COPY server/ ./server/
+COPY client/ ./client/
+
+# Build client only
+RUN cd client && npm run build
+
+# Expose port
+EXPOSE 3000
+
+# Start with tsx
+CMD ["tsx", "server/server.ts"]

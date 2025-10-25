@@ -71,17 +71,20 @@ export class PositionManager {
       } catch (error) {
         console.warn(`[PositionManager] Could not fetch BotState for position ${positionId}: ${error}`);
       }
-      if (!state || !state.currentR || state.currentR <= 0) {
-        console.warn(`[PositionManager] Invalid currentR for position ${positionId}, using default`);
-        // Use default R value and continue instead of returning
-        const unrealizedR = unrealizedPnl / 42; // Default R
-        position.unrealized_pnl = Math.round(unrealizedPnl * 100) / 100;
-        position.unrealized_r = Math.round(unrealizedR * 100) / 100;
-        position.current_price = currentPrice;
-        await position.save();
-        return;
+      
+      // If state is missing or currentR invalid, calculate R from equity
+      let currentR = state?.currentR;
+      if (!state || !currentR || currentR <= 0) {
+        console.warn(`[PositionManager] Invalid currentR for position ${positionId}, calculating from equity`);
+        
+        // Calculate R as 1% of equity (standard risk per trade)
+        const equity = state?.equity || 10000; // Fallback to $10k if equity missing
+        currentR = equity * 0.01;
+        
+        console.info(`[PositionManager] Calculated R = ${currentR.toFixed(2)} (1% of equity $${equity.toFixed(2)})`);
       }
-      const unrealizedR = unrealizedPnl / state.currentR;
+      
+      const unrealizedR = unrealizedPnl / currentR;
 
       // Calculate hold time
       const holdTimeMs = Date.now() - position.opened_at.getTime();

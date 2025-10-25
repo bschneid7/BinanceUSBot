@@ -70,7 +70,7 @@ class PositionReconciliationService {
         }
       }
 
-      // Check for positions missing in database
+      // Check for positions missing in database and auto-create them
       for (const [asset, balance] of binanceBalanceMap.entries()) {
         if (asset === 'USD' || asset === 'USDT' || asset === 'USDC') {
           continue; // Skip stablecoins
@@ -79,6 +79,42 @@ class PositionReconciliationService {
         if (!dbPositionMap.has(asset)) {
           result.missingInDatabase.push(asset);
           console.warn(`[Reconciliation] Position ${asset} exists in Binance but not in database`);
+          
+          // Auto-fix: Create position record for existing holding
+          try {
+            const symbol = `${asset}USD`;
+            const quantity = parseFloat(balance.free) + parseFloat(balance.locked);
+            
+            // Get current market price
+            let currentPrice = 0;
+            try {
+              const ticker = await binanceService.getTickerPrice(symbol);
+              currentPrice = parseFloat(ticker.price);
+            } catch (priceError) {
+              console.error(`[Reconciliation] Could not fetch price for ${symbol}:`, priceError);
+              result.errors.push(`Could not fetch price for ${symbol}`);
+              continue; // Skip if we can't get price
+            }
+            
+            // Create position with MANUAL playbook
+            const newPosition = new Position({
+              userId,
+              symbol,
+              side: 'LONG',
+              entry_price: currentPrice,
+              quantity,
+              playbook: 'MANUAL',
+              status: 'OPEN',
+              opened_at: new Date(),
+            });
+            
+            await newPosition.save();
+            result.fixed++;
+            console.log(`[Reconciliation] Auto-created position for ${asset}: ${quantity} @ $${currentPrice}`);
+          } catch (error) {
+            console.error(`[Reconciliation] Failed to create position for ${asset}:`, error);
+            result.errors.push(`Failed to create position for ${asset}: ${error}`);
+          }
         }
       }
 

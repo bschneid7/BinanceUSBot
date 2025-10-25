@@ -300,7 +300,7 @@ export class GridTradingService {
         if (!level.orderId || level.filled) continue;
 
         // Check if order is filled
-        const orderStatus = await binanceService.getOrderStatus(symbol, level.orderId);
+        const orderStatus = await binanceService.getOrder(symbol, level.orderId);
 
         if (orderStatus && orderStatus.status === 'FILLED') {
           logger.info({ 

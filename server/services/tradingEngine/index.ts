@@ -17,6 +17,7 @@ import exchangeInfoCache from '../exchangeInfoCache';
 import userDataStream from './userDataStream';
 import webSocketService from '../webSocketService';
 import gridTradingService from './gridTrading';
+import multiPairGridTradingService from './gridTradingMultiPair';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -109,14 +110,14 @@ export class TradingEngine {
         logger.warn('[TradingEngine] Continuing with REST API polling');
       }
 
-      // Start Grid Trading service
-      logger.info('[TradingEngine] Starting Grid Trading service...');
+      // Start Multi-Pair Grid Trading service
+      logger.info('[TradingEngine] Starting Multi-Pair Grid Trading service...');
       try {
-        await gridTradingService.start();
-        logger.info('[TradingEngine] Grid Trading service started successfully');
+        await multiPairGridTradingService.start();
+        logger.info('[TradingEngine] Multi-Pair Grid Trading service started successfully');
       } catch (error) {
-        logger.error('[TradingEngine] Failed to start Grid Trading service:', error);
-        logger.warn('[TradingEngine] Continuing without Grid Trading');
+        logger.error('[TradingEngine] Failed to start Multi-Pair Grid Trading service:', error);
+        logger.warn('[TradingEngine] Continuing without Multi-Pair Grid Trading');
       }
 
       // Start self-scheduling scan loop (prevents overlaps)
@@ -179,13 +180,13 @@ export class TradingEngine {
       // Remove from running scans
       this.runningScans.delete(userKey);
 
-      // Stop Grid Trading service
-      logger.info('[TradingEngine] Stopping Grid Trading service...');
+      // Stop Multi-Pair Grid Trading service
+      logger.info('[TradingEngine] Stopping Multi-Pair Grid Trading service...');
       try {
-        await gridTradingService.stop();
-        logger.info('[TradingEngine] Grid Trading service stopped');
+        await multiPairGridTradingService.stop();
+        logger.info('[TradingEngine] Multi-Pair Grid Trading service stopped');
       } catch (error) {
-        logger.error('[TradingEngine] Error stopping Grid Trading service:', error);
+        logger.error('[TradingEngine] Error stopping Multi-Pair Grid Trading service:', error);
       }
 
       // Stop User Data Stream
@@ -304,19 +305,54 @@ export class TradingEngine {
       // Step 6: Process signals
       // Process signals in parallel for better performance
       const results = await Promise.allSettled(
-        signals.map(signal => this.processSignal(userId, signal))
+        signals.map(signal => this.processSignalWithRetry(userId, signal))
       );
       
       // Log any failures
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
-          logger.error({ signal: signals[index], error: result.reason }, 'Signal processing failed');
+          logger.error({ signal: signals[index], error: result.reason }, 'Signal processing failed after retries');
         }
       });
 
       logger.info('[TradingEngine] ===== Scan Cycle Complete =====');
     } catch (error) {
       logger.error('[TradingEngine] Error in scan cycle:', error);
+    }
+  }
+
+  /**
+   * Process a trading signal with retry logic
+   */
+  private async processSignalWithRetry(
+    userId: Types.ObjectId,
+    signal: typeof signalGenerator.prototype,
+    maxRetries: number = 2
+  ): Promise<void> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await this.processSignal(userId, signal);
+        return; // Success - exit retry loop
+      } catch (error) {
+        const isLastAttempt = attempt === maxRetries;
+        
+        if (isLastAttempt) {
+          logger.error(
+            { signal, error, attempts: attempt + 1 },
+            'Signal processing failed after all retries'
+          );
+          throw error;
+        }
+        
+        // Exponential backoff: 1s, 2s
+        const delay = 1000 * Math.pow(2, attempt);
+        logger.warn(
+          { signal, error, attempt: attempt + 1, maxRetries, delay },
+          'Signal processing failed, retrying...'
+        );
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   }
 
