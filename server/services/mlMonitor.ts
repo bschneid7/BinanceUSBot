@@ -87,7 +87,7 @@ export interface MLMetrics {
   
   // Comparison metrics
   mlVsRulesReturnDiff: number;
-  mlVsRulesSharpeD iff: number;
+  mlVsRulesSharpeDiff: number;
   
   // Error metrics
   inferenceErrors: number;
@@ -203,7 +203,7 @@ export class MLMonitor {
     const mlSharpeRatio = 0;  // TODO: Calculate from actual trades
     const mlMaxDrawdown = 0;  // TODO: Calculate from actual trades
     const mlVsRulesReturnDiff = 0;  // TODO: Calculate comparison
-    const mlVsRulesSharpeD iff = 0;  // TODO: Calculate comparison
+    const mlVsRulesSharpeDiff = 0;  // TODO: Calculate comparison
     
     // Get model version (from most recent prediction)
     const modelVersion = predictions.length > 0 
@@ -227,7 +227,7 @@ export class MLMonitor {
       mlSharpeRatio,
       mlMaxDrawdown,
       mlVsRulesReturnDiff,
-      mlVsRulesSharpeD iff,
+      mlVsRulesSharpeDiff,
       inferenceErrors: errors.filter(e => e.errorType === 'INFERENCE_ERROR').length,
       fallbackToRulesCount: 0,  // TODO: Track fallbacks
       lowConfidenceCount,
