@@ -103,6 +103,7 @@ app.use('/api/ml-metrics', mlMetricsRoutes);
 // Manual Trade Routes
 app.use('/api/manual-trade', manualTradeRoutes);
 app.use('/api/risk', riskRoutes);
+app.use("/api/ml", mlRoutes);
 
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {

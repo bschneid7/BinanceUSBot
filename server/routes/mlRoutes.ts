@@ -1,280 +1,322 @@
 import express from 'express';
-import { requireUser } from './middlewares/auth';
-import mlModelService from '../services/mlModelService';
-import { Types } from 'mongoose';
+import { requireUser } from '../middleware/auth';
+import { MLMonitor, MLPredictionLog, MLErrorLog } from '../services/mlMonitor';
+import { BotConfig } from '../models/BotConfig';
 
 const router = express.Router();
 
-// Description: Get all ML models for user
-// Endpoint: GET /api/ml/models
-// Request: { status?: 'TRAINING' | 'ACTIVE' | 'ARCHIVED' | 'FAILED', isDeployed?: boolean }
-// Response: { models: Array<MLModel> }
-router.get('/models', requireUser(), async (req, res) => {
+/**
+ * GET /api/ml/metrics
+ * Get ML performance metrics for a time range
+ */
+router.get('/metrics', requireUser(), async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { status, isDeployed } = req.query;
-
-    console.log(`[MLRoutes] Getting models for user ${userId}`);
-
-    const filters: {
-      status?: 'TRAINING' | 'ACTIVE' | 'ARCHIVED' | 'FAILED';
-      isDeployed?: boolean;
-    } = {};
-
-    if (status) {
-      filters.status = status as 'TRAINING' | 'ACTIVE' | 'ARCHIVED' | 'FAILED';
+    const { range = '24h' } = req.query;
+    
+    if (!['1h', '24h', '7d', '30d'].includes(range as string)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid time range. Must be one of: 1h, 24h, 7d, 30d'
+      });
     }
-
-    if (isDeployed !== undefined) {
-      filters.isDeployed = isDeployed === 'true';
-    }
-
-    const models = await mlModelService.getUserModels(userId, filters);
-
-    res.status(200).json({ models });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error getting models:', err);
-    res.status(500).json({
-      error: err.message || 'Failed to get models',
-    });
-  }
-});
-
-// Description: Get deployed ML model for user
-// Endpoint: GET /api/ml/deployed
-// Request: {}
-// Response: { model: MLModel | null }
-router.get('/deployed', requireUser(), async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    console.log(`[MLRoutes] Getting deployed model for user ${userId}`);
-
-    const model = await mlModelService.getDeployedModel(userId);
-
-    res.status(200).json({ model });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error getting deployed model:', err);
-    res.status(500).json({
-      error: err.message || 'Failed to get deployed model',
-    });
-  }
-});
-
-// Description: Get ML model by ID
-// Endpoint: GET /api/ml/models/:id
-// Request: {}
-// Response: { model: MLModel }
-router.get('/models/:id', requireUser(), async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { id } = req.params;
-
-    console.log(`[MLRoutes] Getting model ${id} for user ${userId}`);
-
-    const model = await mlModelService.getModelById(new Types.ObjectId(id));
-
-    if (!model) {
-      return res.status(404).json({ error: 'Model not found' });
-    }
-
-    // Verify user owns the model
-    if (model.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ error: 'Not authorized to access this model' });
-    }
-
-    res.status(200).json({ model });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error getting model:', err);
-    res.status(500).json({
-      error: err.message || 'Failed to get model',
-    });
-  }
-});
-
-// Description: Deploy an ML model
-// Endpoint: POST /api/ml/models/:id/deploy
-// Request: {}
-// Response: { success: boolean, model: MLModel }
-router.post('/models/:id/deploy', requireUser(), async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { id } = req.params;
-
-    console.log(`[MLRoutes] Deploying model ${id} for user ${userId}`);
-
-    const model = await mlModelService.getModelById(new Types.ObjectId(id));
-
-    if (!model) {
-      return res.status(404).json({ error: 'Model not found' });
-    }
-
-    // Verify user owns the model
-    if (model.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ error: 'Not authorized to deploy this model' });
-    }
-
-    // Deploy the model
-    const deployedModel = await mlModelService.deployModel(new Types.ObjectId(id));
-
-    res.status(200).json({
+    
+    const metrics = await MLMonitor.getMetrics(
+      req.user._id, 
+      range as '1h' | '24h' | '7d' | '30d'
+    );
+    
+    res.json({
       success: true,
-      model: deployedModel,
+      metrics
     });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error deploying model:', err);
+  } catch (error: any) {
+    console.error('[MLRoutes] Error getting metrics:', error);
     res.status(500).json({
-      error: err.message || 'Failed to deploy model',
+      success: false,
+      error: 'Failed to get ML metrics',
+      details: error.message
     });
   }
 });
 
-// Description: Archive an ML model
-// Endpoint: POST /api/ml/models/:id/archive
-// Request: {}
-// Response: { success: boolean, model: MLModel }
-router.post('/models/:id/archive', requireUser(), async (req, res) => {
+/**
+ * GET /api/ml/alerts
+ * Get current ML alerts
+ */
+router.get('/alerts', requireUser(), async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { id } = req.params;
-
-    console.log(`[MLRoutes] Archiving model ${id} for user ${userId}`);
-
-    const model = await mlModelService.getModelById(new Types.ObjectId(id));
-
-    if (!model) {
-      return res.status(404).json({ error: 'Model not found' });
-    }
-
-    // Verify user owns the model
-    if (model.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ error: 'Not authorized to archive this model' });
-    }
-
-    // Archive the model
-    const archivedModel = await mlModelService.archiveModel(new Types.ObjectId(id));
-
-    res.status(200).json({
+    const alerts = await MLMonitor.getAlerts(req.user._id);
+    
+    res.json({
       success: true,
-      model: archivedModel,
+      alerts,
+      count: alerts.length
     });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error archiving model:', err);
+  } catch (error: any) {
+    console.error('[MLRoutes] Error getting alerts:', error);
     res.status(500).json({
-      error: err.message || 'Failed to archive model',
+      success: false,
+      error: 'Failed to get ML alerts',
+      details: error.message
     });
   }
 });
 
-// Description: Update model backtest performance
-// Endpoint: PUT /api/ml/models/:id/backtest
-// Request: { backtestWinRate: number, backtestProfitFactor: number, backtestSharpeRatio: number, backtestMaxDrawdown: number, backtestTotalTrades: number }
-// Response: { success: boolean, model: MLModel }
-router.put('/models/:id/backtest', requireUser(), async (req, res) => {
+/**
+ * GET /api/ml/rollback-check
+ * Check if rollback conditions are met
+ */
+router.get('/rollback-check', requireUser(), async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { id } = req.params;
-    const {
-      backtestWinRate,
-      backtestProfitFactor,
-      backtestSharpeRatio,
-      backtestMaxDrawdown,
-      backtestTotalTrades,
-    } = req.body;
-
-    console.log(`[MLRoutes] Updating backtest performance for model ${id}`);
-
-    const model = await mlModelService.getModelById(new Types.ObjectId(id));
-
-    if (!model) {
-      return res.status(404).json({ error: 'Model not found' });
-    }
-
-    // Verify user owns the model
-    if (model.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ error: 'Not authorized to update this model' });
-    }
-
-    // Validate inputs
-    if (
-      typeof backtestWinRate !== 'number' ||
-      typeof backtestProfitFactor !== 'number' ||
-      typeof backtestSharpeRatio !== 'number' ||
-      typeof backtestMaxDrawdown !== 'number' ||
-      typeof backtestTotalTrades !== 'number'
-    ) {
-      return res.status(400).json({ error: 'Invalid backtest performance data' });
-    }
-
-    // Update backtest performance
-    const updatedModel = await mlModelService.updateBacktestPerformance(new Types.ObjectId(id), {
-      backtestWinRate,
-      backtestProfitFactor,
-      backtestSharpeRatio,
-      backtestMaxDrawdown,
-      backtestTotalTrades,
-    });
-
-    res.status(200).json({
+    const rollbackCheck = await MLMonitor.checkRollbackConditions(req.user._id);
+    
+    res.json({
       success: true,
-      model: updatedModel,
+      ...rollbackCheck
     });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error updating backtest performance:', err);
+  } catch (error: any) {
+    console.error('[MLRoutes] Error checking rollback conditions:', error);
     res.status(500).json({
-      error: err.message || 'Failed to update backtest performance',
-    });
-  }
-});
-
-// Description: Get ML model statistics
-// Endpoint: GET /api/ml/stats
-// Request: {}
-// Response: { stats: { totalModels, activeModels, deployedModels, trainingModels, archivedModels, failedModels, bestModel } }
-router.get('/stats', requireUser(), async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    console.log(`[MLRoutes] Getting model stats for user ${userId}`);
-
-    const stats = await mlModelService.getModelStats(userId);
-
-    res.status(200).json({ stats });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error getting model stats:', err);
-    res.status(500).json({
-      error: err.message || 'Failed to get model stats',
+      success: false,
+      error: 'Failed to check rollback conditions',
+      details: error.message
     });
   }
 });
 
-// Description: Update live performance for deployed model
-// Endpoint: POST /api/ml/update-live-performance
-// Request: {}
-// Response: { success: boolean }
-router.post('/update-live-performance', requireUser(), async (req, res) => {
+/**
+ * GET /api/ml/predictions
+ * Get recent ML predictions
+ */
+router.get('/predictions', requireUser(), async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    console.log(`[MLRoutes] Updating live performance for user ${userId}`);
-
-    await mlModelService.updateLivePerformance(userId);
-
-    res.status(200).json({ success: true });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[MLRoutes] Error updating live performance:', err);
+    const { limit = 100, symbol } = req.query;
+    
+    const query: any = { userId: req.user._id };
+    if (symbol) {
+      query.symbol = symbol;
+    }
+    
+    const predictions = await MLPredictionLog.find(query)
+      .sort({ timestamp: -1 })
+      .limit(Number(limit))
+      .lean();
+    
+    res.json({
+      success: true,
+      predictions,
+      count: predictions.length
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error getting predictions:', error);
     res.status(500).json({
-      error: err.message || 'Failed to update live performance',
+      success: false,
+      error: 'Failed to get ML predictions',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/ml/errors
+ * Get recent ML errors
+ */
+router.get('/errors', requireUser(), async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+    
+    const errors = await MLErrorLog.find({ userId: req.user._id })
+      .sort({ timestamp: -1 })
+      .limit(Number(limit))
+      .lean();
+    
+    res.json({
+      success: true,
+      errors,
+      count: errors.length
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error getting errors:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get ML errors',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/ml/enable
+ * Enable ML trading with specified allocation
+ */
+router.post('/enable', requireUser(), async (req, res) => {
+  try {
+    const { allocationPct = 10, modelVersion = 'v1', minConfidence = 0.6 } = req.body;
+    
+    // Validation
+    if (allocationPct < 0 || allocationPct > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Allocation percentage must be between 0 and 100'
+      });
+    }
+    
+    if (minConfidence < 0 || minConfidence > 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Minimum confidence must be between 0 and 1'
+      });
+    }
+    
+    // Update config
+    await BotConfig.updateOne(
+      { userId: req.user._id },
+      {
+        $set: {
+          'ml.enabled': true,
+          'ml.model_version': modelVersion,
+          'ml.allocation_pct': allocationPct,
+          'ml.min_confidence': minConfidence
+        }
+      },
+      { upsert: true }
+    );
+    
+    console.log(`[MLRoutes] ✅ ML enabled: ${allocationPct}% allocation, model ${modelVersion}`);
+    
+    res.json({
+      success: true,
+      message: 'ML trading enabled',
+      config: {
+        enabled: true,
+        allocationPct,
+        modelVersion,
+        minConfidence
+      }
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error enabling ML:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to enable ML trading',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/ml/disable
+ * Disable ML trading
+ */
+router.post('/disable', requireUser(), async (req, res) => {
+  try {
+    const { reason } = req.body;
+    
+    // Update config
+    await BotConfig.updateOne(
+      { userId: req.user._id },
+      {
+        $set: {
+          'ml.enabled': false,
+          'ml.allocation_pct': 0
+        }
+      }
+    );
+    
+    console.log(`[MLRoutes] 🛑 ML disabled. Reason: ${reason || 'Manual disable'}`);
+    
+    res.json({
+      success: true,
+      message: 'ML trading disabled',
+      reason: reason || 'Manual disable'
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error disabling ML:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to disable ML trading',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/ml/update-allocation
+ * Update ML allocation percentage
+ */
+router.post('/update-allocation', requireUser(), async (req, res) => {
+  try {
+    const { allocationPct } = req.body;
+    
+    if (typeof allocationPct !== 'number' || allocationPct < 0 || allocationPct > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Allocation percentage must be a number between 0 and 100'
+      });
+    }
+    
+    await BotConfig.updateOne(
+      { userId: req.user._id },
+      { $set: { 'ml.allocation_pct': allocationPct } }
+    );
+    
+    console.log(`[MLRoutes] 📊 ML allocation updated: ${allocationPct}%`);
+    
+    res.json({
+      success: true,
+      message: 'ML allocation updated',
+      allocationPct
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error updating allocation:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update ML allocation',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/ml/status
+ * Get current ML configuration and status
+ */
+router.get('/status', requireUser(), async (req, res) => {
+  try {
+    const config = await BotConfig.findOne({ userId: req.user._id }).lean();
+    
+    if (!config || !config.ml) {
+      return res.json({
+        success: true,
+        status: {
+          enabled: false,
+          allocationPct: 0,
+          modelVersion: 'none',
+          minConfidence: 0.6,
+          fallbackToRules: true
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      status: {
+        enabled: config.ml.enabled || false,
+        allocationPct: config.ml.allocation_pct || 0,
+        modelVersion: config.ml.model_version || 'v1',
+        minConfidence: config.ml.min_confidence || 0.6,
+        fallbackToRules: config.ml.fallback_to_rules !== false
+      }
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error getting status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get ML status',
+      details: error.message
     });
   }
 });
 
 export default router;
+
