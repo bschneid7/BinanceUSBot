@@ -215,14 +215,14 @@ class PPOAgent:
     def save(self, path):
         """Save model weights"""
         os.makedirs(path, exist_ok=True)
-        self.actor.save_weights(f"{path}/actor.h5")
-        self.critic.save_weights(f"{path}/critic.h5")
+        self.actor.save_weights(f"{path}/actor.weights.h5")
+        self.critic.save_weights(f"{path}/critic.weights.h5")
         print(f"[Agent] Model saved to {path}")
         
     def load(self, path):
         """Load model weights"""
-        self.actor.load_weights(f"{path}/actor.h5")
-        self.critic.load_weights(f"{path}/critic.h5")
+        self.actor.load_weights(f"{path}/actor.weights.h5")
+        self.critic.load_weights(f"{path}/critic.weights.h5")
         print(f"[Agent] Model loaded from {path}")
 
 class TradingEnvironment:
