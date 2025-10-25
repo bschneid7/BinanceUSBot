@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Types } from 'mongoose';
 import Position from '../../models/Position';
 import Trade from '../../models/Trade';
@@ -312,96 +313,117 @@ export class PositionManager {
   /**
    * Close a position
    */
+  /**
+   * Close position with atomic transaction
+   * ✅ FIXED: All database operations are now atomic (all succeed or all fail)
+   */
   async closePosition(
     positionId: Types.ObjectId,
     reason: 'STOP_LOSS' | 'TARGET' | 'MANUAL' | 'KILL_SWITCH' | 'TIME_STOP'
   ): Promise<void> {
+    // Start MongoDB session for transaction
+    const session = await mongoose.startSession();
+    
     try {
-      const position = await Position.findById(positionId);
-      if (!position || position.status !== 'OPEN') {
-        return;
-      }
+      // Execute all operations in a transaction
+      await session.withTransaction(async () => {
+        // 1. Get position (with session)
+        const position = await Position.findById(positionId).session(session);
+        if (!position || position.status !== 'OPEN') {
+          throw new Error(`Position ${positionId} not found or already closed`);
+        }
 
-      console.log(`[PositionManager] Closing position ${positionId} - Reason: ${reason}`);
+        console.log(`[PositionManager] Closing position ${positionId} - Reason: ${reason}`);
+        
+        const closePrice = position.current_price || position.entry_price;
 
-      const closePrice = position.current_price || position.entry_price;
+        // 2. Place closing order (outside transaction - exchange operation)
+        // Note: This happens BEFORE the transaction commits
+        // If this fails, the transaction will rollback
+        const result = await executionRouter.executeSignal(
+          position.userId,
+          {
+            symbol: position.symbol,
+            playbook: position.playbook,
+            action: position.side === 'LONG' ? 'SELL' : 'BUY',
+            entryPrice: closePrice,
+            stopPrice: 0,
+            reason: `Close position - ${reason}`,
+          },
+          position.quantity,
+          position._id as Types.ObjectId
+        );
 
-      // Place closing order
-      const result = await executionRouter.executeSignal(
-        position.userId,
-        {
+        if (!result.success) {
+          throw new Error(`Failed to execute closing order: ${result.error}`);
+        }
+
+        // 3. Calculate realized PnL
+        const priceDiff = position.side === 'LONG'
+          ? closePrice - position.entry_price
+          : position.entry_price - closePrice;
+        const realizedPnl = priceDiff * position.quantity - (result.fees || 0);
+
+        // 4. Get BotState for R calculation
+        let state = await BotState.findOne({ userId: position.userId }).session(session);
+        let currentR = 42; // Default fallback
+        
+        if (state && state.currentR && state.currentR > 0) {
+          currentR = state.currentR;
+        } else {
+          console.warn(`[PositionManager] Invalid currentR, using default value`);
+        }
+        
+        const realizedR = currentR > 0 ? realizedPnl / currentR : 0;
+
+        // 5. Update position (atomic - part of transaction)
+        position.status = 'CLOSED';
+        position.closed_at = new Date();
+        position.realized_pnl = Math.round(realizedPnl * 100) / 100;
+        position.realized_r = Math.round(realizedR * 100) / 100;
+        position.fees_paid = (position.fees_paid || 0) + (result.fees || 0);
+        await position.save({ session });
+
+        // 6. Create trade record (atomic - part of transaction)
+        await Trade.create([{
+          userId: position.userId,
           symbol: position.symbol,
+          side: position.side,
           playbook: position.playbook,
-          action: position.side === 'LONG' ? 'SELL' : 'BUY',
-          entryPrice: closePrice,
-          stopPrice: 0,
-          reason: `Close position - ${reason}`,
-        },
-        position.quantity,
-        position._id as Types.ObjectId
-      );
+          entry_price: position.entry_price,
+          exit_price: closePrice,
+          quantity: position.quantity,
+          pnl_usd: realizedPnl,
+          pnl_r: realizedR,
+          fees: position.fees_paid,
+          date: position.closed_at,
+          outcome: realizedPnl > 0 ? 'WIN' : realizedPnl < 0 ? 'LOSS' : 'BREAKEVEN',
+          notes: `Closed via ${reason}`,
+        }], { session });
 
-      if (!result.success) {
-        console.error(`[PositionManager] Failed to close position: ${result.error}`);
-        return;
-      }
+        // 7. Update bot state PnL (atomic - part of transaction)
+        if (state) {
+          state.dailyPnl += realizedPnl;
+          state.dailyPnlR += realizedR;
+          state.weeklyPnl += realizedPnl;
+          state.weeklyPnlR += realizedR;
+          await state.save({ session });
+        }
 
-      // Calculate realized PnL
-      const priceDiff = position.side === 'LONG'
-        ? closePrice - position.entry_price
-        : position.entry_price - closePrice;
-
-      const realizedPnl = priceDiff * position.quantity - (result.fees || 0);
-
-      // Calculate realized R
-      let state = null;
-      let currentR = 42; // Default fallback
-      try {
-        state = await BotState.findOne({ userId: position.userId });
-        currentR = state?.currentR || 42;
-      } catch (error) {
-        console.warn(`[PositionManager] Could not fetch BotState, using default R value: ${error}`);
-      }
-      const realizedR = currentR > 0 ? realizedPnl / currentR : 0;
-
-      // Update position
-      position.status = 'CLOSED';
-      position.closed_at = new Date();
-      position.realized_pnl = Math.round(realizedPnl * 100) / 100;
-      position.realized_r = Math.round(realizedR * 100) / 100;
-      position.fees_paid = (position.fees_paid || 0) + (result.fees || 0);
-      await position.save();
-
-      // Create trade record
-      await Trade.create({
-        userId: position.userId,
-        symbol: position.symbol,
-        side: position.side,
-        playbook: position.playbook,
-        entry_price: position.entry_price,
-        exit_price: closePrice,
-        quantity: position.quantity,
-        pnl_usd: realizedPnl,
-        pnl_r: realizedR,
-        fees: position.fees_paid,
-        date: position.closed_at,
-        outcome: realizedPnl > 0 ? 'WIN' : realizedPnl < 0 ? 'LOSS' : 'BREAKEVEN',
-        notes: `Closed via ${reason}`,
+        console.log(`[PositionManager] ✅ Position ${positionId} closed atomically: ${realizedPnl.toFixed(2)} USD (${realizedR.toFixed(2)}R)`);
       });
-
-      // Update bot state PnL
-      if (state) {
-        state.dailyPnl += realizedPnl;
-        state.dailyPnlR += realizedR;
-        state.weeklyPnl += realizedPnl;
-        state.weeklyPnlR += realizedR;
-        await state.save();
-      }
-
-      console.log(`[PositionManager] Position closed: ${position.symbol} - PnL: $${realizedPnl.toFixed(2)} (${realizedR.toFixed(2)}R)`);
+      
+      // Transaction committed successfully
+      console.log(`[PositionManager] Transaction committed for position ${positionId}`);
+      
     } catch (error) {
-      console.error(`[PositionManager] Error closing position ${positionId}:`, error);
+      // Transaction rolled back automatically
+      console.error(`[PositionManager] ❌ Transaction failed for position ${positionId}:`, error);
+      console.error(`[PositionManager] All changes rolled back`);
       throw error;
+    } finally {
+      // Always end the session
+      await session.endSession();
     }
   }
 

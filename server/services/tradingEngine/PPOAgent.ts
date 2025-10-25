@@ -1,51 +1,85 @@
 import * as tf from '@tensorflow/tfjs-node';
 
 /**
- * PPO (Proximal Policy Optimization) Agent for Trading
- *
- * Optimizes buy/sell/hold decisions via reinforcement learning
- * State: OHLCV + sentiment (5-dim vector)
- * Actions: 0=hold, 1=buy, 2=sell
- * Rewards: profit - drawdown penalty
+ * PPO Agent Configuration
+ * CRITICAL: State dimensions MUST match train_enhanced_ppo.py (17 features)
  */
-
 interface PPOConfig {
-  stateDim: number;
-  actionDim: number;
+  stateDim: number;      // MUST be 17 to match training
+  actionDim: number;     // 4 actions: HOLD, BUY, SELL, SHORT
   learningRate: number;
-  gamma: number; // Discount factor
-  epsilon: number; // Clip parameter
-  epochs: number;
+  gamma: number;
+  epsilon: number;
 }
 
+/**
+ * Experience Memory for PPO Training
+ */
+interface PPOMemory {
+  states: number[][];
+  actions: number[];
+  rewards: number[];
+  dones: boolean[];
+}
+
+/**
+ * PPO Agent for Reinforcement Learning Trading
+ * 
+ * State Space (17 dimensions - MUST match training):
+ * 1. Normalized Price
+ * 2. Latest Return
+ * 3. Normalized Volume
+ * 4. 5-Period Average Return
+ * 5. 5-Period Volatility
+ * 6. RSI
+ * 7. MACD
+ * 8. MACD Signal
+ * 9. Funding Rate (CDD)
+ * 10. Funding Trend (CDD)
+ * 11. VWAP Deviation (CDD)
+ * 12. Order Flow Imbalance (CDD)
+ * 13. Correlation Score (CDD)
+ * 14. Has Position
+ * 15. Position PnL
+ * 16. Normalized Equity
+ * 17. Drawdown
+ * 
+ * Action Space (4 actions):
+ * 0: HOLD - No action
+ * 1: BUY - Enter long position
+ * 2: SELL - Close position
+ * 3: SHORT - Enter short position (if enabled)
+ */
 export class PPOAgent {
-  private stateDim: number;
-  private actionDim: number;
+  private config: PPOConfig;
   private actor: tf.LayersModel | null = null;
   private critic: tf.LayersModel | null = null;
-  private config: PPOConfig;
-  private memory: {
-    states: number[][];
-    actions: number[];
-    rewards: number[];
-    dones: boolean[];
-  };
+  private memory: PPOMemory;
 
-  constructor(
-    stateDim: number = 5,
-    actionDim: number = 3,
-    config: Partial<PPOConfig> = {}
-  ) {
-    this.stateDim = stateDim;
-    this.actionDim = actionDim;
+  constructor(config?: Partial<PPOConfig>) {
+    // Default configuration - MUST match training script
     this.config = {
-      stateDim,
-      actionDim,
-      learningRate: config.learningRate || 0.0003,
-      gamma: config.gamma || 0.99,
-      epsilon: config.epsilon || 0.2,
-      epochs: config.epochs || 1000,
+      stateDim: 17,  // ✅ FIXED: Match train_enhanced_ppo.py
+      actionDim: 4,  // ✅ FIXED: 4 actions (HOLD, BUY, SELL, SHORT)
+      learningRate: 0.0003,
+      gamma: 0.99,
+      epsilon: 0.2,
+      ...config,
     };
+
+    // Validate state dimensions
+    if (this.config.stateDim !== 17) {
+      throw new Error(
+        `[PPOAgent] CRITICAL: State dimension must be 17 to match training script. Got: ${this.config.stateDim}`
+      );
+    }
+
+    if (this.config.actionDim !== 4) {
+      throw new Error(
+        `[PPOAgent] CRITICAL: Action dimension must be 4 to match training script. Got: ${this.config.actionDim}`
+      );
+    }
+
     this.memory = {
       states: [],
       actions: [],
@@ -53,94 +87,97 @@ export class PPOAgent {
       dones: [],
     };
 
-    this.buildModels();
     console.log('[PPOAgent] Initialized with config:', this.config);
   }
 
   /**
-   * Build actor and critic neural networks
+   * Build actor network (policy)
    */
-  private buildModels(): void {
-    try {
-      // Actor network (policy)
-      this.actor = tf.sequential({
-        layers: [
-          tf.layers.dense({
-            units: 64,
-            activation: 'relu',
-            inputShape: [this.stateDim],
-          }),
-          tf.layers.dense({ units: 64, activation: 'relu' }),
-          tf.layers.dense({
-            units: this.actionDim,
-            activation: 'softmax',
-          }),
-        ],
-      });
+  private buildActor(): tf.LayersModel {
+    const input = tf.input({ shape: [this.config.stateDim] });
+    
+    // Hidden layers
+    let x = tf.layers.dense({ units: 128, activation: 'relu' }).apply(input) as tf.SymbolicTensor;
+    x = tf.layers.dense({ units: 64, activation: 'relu' }).apply(x) as tf.SymbolicTensor;
+    
+    // Output layer - softmax for action probabilities
+    const output = tf.layers.dense({ 
+      units: this.config.actionDim, 
+      activation: 'softmax' 
+    }).apply(x) as tf.SymbolicTensor;
 
-      this.actor.compile({
-        optimizer: tf.train.adam(this.config.learningRate),
-        loss: 'categoricalCrossentropy',
-      });
+    const model = tf.model({ inputs: input, outputs: output });
+    
+    model.compile({
+      optimizer: tf.train.adam(this.config.learningRate),
+      loss: 'categoricalCrossentropy',
+    });
 
-      // Critic network (value function)
-      this.critic = tf.sequential({
-        layers: [
-          tf.layers.dense({
-            units: 64,
-            activation: 'relu',
-            inputShape: [this.stateDim],
-          }),
-          tf.layers.dense({ units: 64, activation: 'relu' }),
-          tf.layers.dense({ units: 1, activation: 'linear' }),
-        ],
-      });
-
-      this.critic.compile({
-        optimizer: tf.train.adam(this.config.learningRate),
-        loss: 'meanSquaredError',
-      });
-
-      console.log('[PPOAgent] Models built successfully');
-    } catch (error) {
-      console.error('[PPOAgent] Error building models:', error);
-      throw error;
-    }
+    console.log('[PPOAgent] Actor network built');
+    return model;
   }
 
   /**
-   * Get action from policy (actor network)
-   * @param state Current market state [price, volume, volatility, sentiment, etc.]
-   * @returns Action index (0=hold, 1=buy, 2=sell)
+   * Build critic network (value function)
+   */
+  private buildCritic(): tf.LayersModel {
+    const input = tf.input({ shape: [this.config.stateDim] });
+    
+    // Hidden layers
+    let x = tf.layers.dense({ units: 128, activation: 'relu' }).apply(input) as tf.SymbolicTensor;
+    x = tf.layers.dense({ units: 64, activation: 'relu' }).apply(x) as tf.SymbolicTensor;
+    
+    // Output layer - single value for state value
+    const output = tf.layers.dense({ units: 1 }).apply(x) as tf.SymbolicTensor;
+
+    const model = tf.model({ inputs: input, outputs: output });
+    
+    model.compile({
+      optimizer: tf.train.adam(this.config.learningRate),
+      loss: 'meanSquaredError',
+    });
+
+    console.log('[PPOAgent] Critic network built');
+    return model;
+  }
+
+  /**
+   * Get action from current policy
+   * @param state - 17-dimensional state vector
+   * @returns action index (0-3)
    */
   async getAction(state: number[]): Promise<number> {
-    try {
-      if (!this.actor) {
-        throw new Error('Actor model not initialized');
-      }
+    // Validate state dimensions
+    if (state.length !== this.config.stateDim) {
+      throw new Error(
+        `[PPOAgent] Invalid state dimensions. Expected ${this.config.stateDim}, got ${state.length}`
+      );
+    }
 
-      const stateTensor = tf.tensor2d([state], [1, this.stateDim]);
+    // Initialize networks if not already done
+    if (!this.actor) {
+      this.actor = this.buildActor();
+    }
+
+    try {
+      // Convert state to tensor
+      const stateTensor = tf.tensor2d([state], [1, this.config.stateDim]);
+      
+      // Get action probabilities from actor
       const actionProbs = (await this.actor.predict(stateTensor)) as tf.Tensor;
-      const actionProbsArray = await actionProbs.data();
+      const probs = Array.from(await actionProbs.data());
 
       // Sample action from probability distribution
-      const action = this.sampleAction(Array.from(actionProbsArray));
+      const action = this.sampleAction(probs);
 
-      // Cleanup tensors
+      // Cleanup
       stateTensor.dispose();
       actionProbs.dispose();
-
-      console.log(
-        `[PPOAgent] State: [${state.map((v) => v.toFixed(2)).join(', ')}], Action: ${action}, Probs: [${Array.from(actionProbsArray)
-          .map((p) => p.toFixed(3))
-          .join(', ')}]`
-      );
 
       return action;
     } catch (error) {
       console.error('[PPOAgent] Error getting action:', error);
-      // Fallback to hold action on error
-      return 0;
+      throw error;
     }
   }
 
@@ -148,28 +185,29 @@ export class PPOAgent {
    * Sample action from probability distribution
    */
   private sampleAction(probs: number[]): number {
-    const random = Math.random();
+    const rand = Math.random();
     let cumulative = 0;
-
+    
     for (let i = 0; i < probs.length; i++) {
       cumulative += probs[i];
-      if (random < cumulative) {
+      if (rand < cumulative) {
         return i;
       }
     }
-
-    return probs.length - 1;
+    
+    return probs.length - 1; // Fallback to last action
   }
 
   /**
    * Store experience in memory
    */
-  storeExperience(
-    state: number[],
-    action: number,
-    reward: number,
-    done: boolean
-  ): void {
+  storeExperience(state: number[], action: number, reward: number, done: boolean): void {
+    if (state.length !== this.config.stateDim) {
+      throw new Error(
+        `[PPOAgent] Cannot store experience with invalid state dimensions. Expected ${this.config.stateDim}, got ${state.length}`
+      );
+    }
+
     this.memory.states.push(state);
     this.memory.actions.push(action);
     this.memory.rewards.push(reward);
@@ -177,102 +215,34 @@ export class PPOAgent {
   }
 
   /**
-   * Train the agent using PPO algorithm
-   * @param episodes Number of training episodes
-   * @param historicalData Historical market data for simulation
+   * Train the agent on one episode
+   * Note: This is a simplified training loop for demonstration
+   * Production training should use train_enhanced_ppo.py
    */
-  async train(
-    episodes: number,
-    historicalData?: Array<{
-      price: number;
-      volume: number;
-      volatility: number;
-    }>
-  ): Promise<{ avgReward: number; episodeRewards: number[] }> {
-    console.log(`[PPOAgent] Starting training for ${episodes} episodes`);
+  async trainEpisode(data: any[]): Promise<number> {
+    console.log('[PPOAgent] Training episode (simplified - use Python script for production)');
+    
+    // Initialize networks
+    if (!this.actor) this.actor = this.buildActor();
+    if (!this.critic) this.critic = this.buildCritic();
 
-    const episodeRewards: number[] = [];
-    let totalReward = 0;
-
-    try {
-      for (let episode = 0; episode < episodes; episode++) {
-        // Reset memory for new episode
-        this.memory = {
-          states: [],
-          actions: [],
-          rewards: [],
-          dones: [],
-        };
-
-        // Simulate trading episode
-        const episodeReward = await this.simulateEpisode(historicalData);
-        episodeRewards.push(episodeReward);
-        totalReward += episodeReward;
-
-        // Update policy every episode
-        if (this.memory.states.length > 0) {
-          await this.updatePolicy();
-        }
-
-        if ((episode + 1) % 10 === 0) {
-          console.log(
-            `[PPOAgent] Episode ${episode + 1}/${episodes}, Reward: ${episodeReward.toFixed(2)}, Avg: ${(totalReward / (episode + 1)).toFixed(2)}`
-          );
-        }
-      }
-
-      const avgReward = totalReward / episodes;
-      console.log(
-        `[PPOAgent] Training complete. Average reward: ${avgReward.toFixed(2)}`
-      );
-
-      return { avgReward, episodeRewards };
-    } catch (error) {
-      console.error('[PPOAgent] Error during training:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Simulate a trading episode
-   */
-  private async simulateEpisode(
-    historicalData?: Array<{
-      price: number;
-      volume: number;
-      volatility: number;
-    }>
-  ): Promise<number> {
     let totalReward = 0;
     let position = 0; // 0 = no position, 1 = long, -1 = short
     let entryPrice = 0;
-    let equity = 6000; // Initial capital
-    const maxDrawdown = 0.3; // 30% max drawdown cap
-
-    // Use historical data or generate synthetic data
-    const data =
-      historicalData ||
-      this.generateSyntheticData(100); // 100 steps per episode
+    let equity = 10000;
+    const maxDrawdown = 0.2;
 
     for (let t = 0; t < data.length; t++) {
       const { price, volume, volatility } = data[t];
-      const sentiment = Math.random() > 0.5 ? 1 : 0; // Mock sentiment
-
-      // Normalize state
-      const state = [
-        price / 100000, // Normalize price
-        volume / 1000000, // Normalize volume
-        volatility,
-        sentiment,
-        position, // Current position as state
-      ];
-
+      
+      // Build 17-dimensional state (simplified - production should use full features)
+      const state = this.buildSimplifiedState(price, volume, volatility, position, equity, entryPrice);
+      
       // Get action from policy
       const action = await this.getAction(state);
-
+      
       // Execute action and calculate reward
       let reward = 0;
-
       if (action === 1 && position === 0) {
         // Buy
         position = 1;
@@ -284,48 +254,73 @@ export class PPOAgent {
         equity += pnl;
         reward = pnl / 100; // Normalize reward
         position = 0;
-
+        
         // Penalty for exceeding drawdown
-        if (equity < 6000 * (1 - maxDrawdown)) {
+        if (equity < 10000 * (1 - maxDrawdown)) {
           reward -= 10; // Large penalty for breaching drawdown cap
         }
       } else {
         // Hold or invalid action
         reward = -0.0001; // Tiny penalty for inaction
       }
-
+      
       // Store experience
       const done = t === data.length - 1;
       this.storeExperience(state, action, reward, done);
-
       totalReward += reward;
     }
+
+    // Update policy after episode
+    await this.updatePolicy();
 
     return totalReward;
   }
 
   /**
-   * Generate synthetic market data for training
+   * Build simplified 17-dimensional state
+   * Note: Production should use full feature calculation from CDD data
    */
-  private generateSyntheticData(
-    steps: number
-  ): Array<{ price: number; volume: number; volatility: number }> {
-    const data = [];
-    let price = 50000 + Math.random() * 10000; // Start around $50k-$60k
+  private buildSimplifiedState(
+    price: number,
+    volume: number,
+    volatility: number,
+    position: number,
+    equity: number,
+    entryPrice: number
+  ): number[] {
+    const normalizedPrice = price / 100000;
+    const normalizedVolume = volume / 1000000;
+    const normalizedEquity = equity / 10000;
+    
+    // Calculate PnL if in position
+    const pnl = position !== 0 && entryPrice > 0 
+      ? ((price - entryPrice) / entryPrice) 
+      : 0;
+    
+    // Calculate drawdown
+    const peakEquity = 10000; // Simplified
+    const drawdown = (peakEquity - equity) / peakEquity;
 
-    for (let i = 0; i < steps; i++) {
-      // Random walk with drift
-      const change = (Math.random() - 0.48) * 1000; // Slight upward bias
-      price = Math.max(10000, price + change);
-
-      data.push({
-        price,
-        volume: 500000 + Math.random() * 500000,
-        volatility: 0.01 + Math.random() * 0.05,
-      });
-    }
-
-    return data;
+    // Return 17-dimensional state (simplified placeholders for missing features)
+    return [
+      normalizedPrice,           // 1. Normalized Price
+      0,                         // 2. Latest Return (placeholder)
+      normalizedVolume,          // 3. Normalized Volume
+      0,                         // 4. 5-Period Avg Return (placeholder)
+      volatility,                // 5. 5-Period Volatility
+      0.5,                       // 6. RSI (placeholder)
+      0,                         // 7. MACD (placeholder)
+      0,                         // 8. MACD Signal (placeholder)
+      0,                         // 9. Funding Rate (placeholder)
+      0,                         // 10. Funding Trend (placeholder)
+      0,                         // 11. VWAP Deviation (placeholder)
+      0,                         // 12. Order Flow Imbalance (placeholder)
+      0.5,                       // 13. Correlation Score (placeholder)
+      position !== 0 ? 1 : 0,    // 14. Has Position
+      pnl,                       // 15. Position PnL
+      normalizedEquity,          // 16. Normalized Equity
+      drawdown,                  // 17. Drawdown
+    ];
   }
 
   /**
@@ -385,12 +380,12 @@ export class PPOAgent {
   private computeReturns(): number[] {
     const returns: number[] = [];
     let runningReturn = 0;
-
+    
     for (let t = this.memory.rewards.length - 1; t >= 0; t--) {
       runningReturn = this.memory.rewards[t] + this.config.gamma * runningReturn;
       returns.unshift(runningReturn);
     }
-
+    
     return returns;
   }
 
@@ -417,7 +412,19 @@ export class PPOAgent {
     try {
       this.actor = await tf.loadLayersModel(`file://${path}/actor/model.json`);
       this.critic = await tf.loadLayersModel(`file://${path}/critic/model.json`);
+      
+      // Validate loaded model dimensions
+      const actorInputShape = this.actor.inputs[0].shape;
+      const expectedStateDim = actorInputShape[1];
+      
+      if (expectedStateDim !== this.config.stateDim) {
+        throw new Error(
+          `[PPOAgent] Loaded model state dimension (${expectedStateDim}) does not match config (${this.config.stateDim})`
+        );
+      }
+      
       console.log(`[PPOAgent] Model loaded from ${path}`);
+      console.log(`[PPOAgent] Validated state dimensions: ${expectedStateDim}`);
     } catch (error) {
       console.error('[PPOAgent] Error loading model:', error);
       throw error;
@@ -427,13 +434,22 @@ export class PPOAgent {
   /**
    * Get model statistics
    */
-  getStats(): { memorySize: number; actorParams: number; criticParams: number } {
+  getStats(): { 
+    memorySize: number; 
+    actorParams: number; 
+    criticParams: number;
+    stateDim: number;
+    actionDim: number;
+  } {
     return {
       memorySize: this.memory.states.length,
       actorParams: this.actor ? this.actor.countParams() : 0,
       criticParams: this.critic ? this.critic.countParams() : 0,
+      stateDim: this.config.stateDim,
+      actionDim: this.config.actionDim,
     };
   }
 }
 
 export default PPOAgent;
+

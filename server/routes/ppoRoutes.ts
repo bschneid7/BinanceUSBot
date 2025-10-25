@@ -29,7 +29,7 @@ const trainingJobs = new Map<string, TrainingJob>();
  */
 function getPPOAgent(userId: string): PPOAgent {
   if (!ppoAgents.has(userId)) {
-    const agent = new PPOAgent(5, 3); // 5-dim state, 3 actions
+    const agent = new PPOAgent(); // 5-dim state, 3 actions
     ppoAgents.set(userId, agent);
     console.log(`[PPORoutes] Created new PPO agent for user ${userId}`);
   }
@@ -80,8 +80,8 @@ router.post('/train', requireUser(), async (req, res) => {
       avgReward: 0,
       episodeRewards: [],
       config: {
-        stateDim: 5,
-        actionDim: 3,
+        stateDim: 17,
+        actionDim: 4,
         learningRate: 0.0003,
         gamma: 0.99,
         epsilon: 0.2,
@@ -222,9 +222,9 @@ router.post('/action', requireUser(), async (req, res) => {
     const { state } = req.body;
 
     // Validate state
-    if (!Array.isArray(state) || state.length !== 5) {
+    if (!Array.isArray(state) || state.length !== 17) {
       return res.status(400).json({
-        error: 'Invalid state parameter. Must be array of 5 numbers',
+        error: 'Invalid state parameter. Must be array of 17 numbers',
       });
     }
 

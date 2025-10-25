@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
+import Bottleneck from 'bottleneck';
 import webSocketService from './webSocketService';
 
 interface BinanceTickerData {
@@ -112,6 +113,10 @@ class BinanceService {
   // Retry configuration
   private readonly MAX_RETRIES = 5;
   private readonly BASE_RETRY_DELAY = 1000; // 1 second
+  
+  // ✅ Rate limiting (Binance limits: 1200 requests/minute, 10 orders/second)
+  private limiter: Bottleneck;
+  private orderLimiter: Bottleneck;
 
   constructor() {
     this.apiKey = process.env.BINANCE_US_API_KEY || '';
@@ -122,8 +127,40 @@ class BinanceService {
       baseURL: this.baseUrl,
       timeout: 10000,
     });
+    
+    // ✅ Initialize rate limiters
+    // General API limiter: 1200 requests per minute
+    this.limiter = new Bottleneck({
+      reservoir: 1200,                    // Initial capacity
+      reservoirRefreshAmount: 1200,       // Refill amount
+      reservoirRefreshInterval: 60 * 1000, // Refill every minute
+      maxConcurrent: 5,                   // Max concurrent requests
+      minTime: 50                         // Min 50ms between requests
+    });
+    
+    // Order limiter: 10 orders per second (stricter)
+    this.orderLimiter = new Bottleneck({
+      reservoir: 10,
+      reservoirRefreshAmount: 10,
+      reservoirRefreshInterval: 1000,     // Refill every second
+      maxConcurrent: 1,                   // One order at a time
+      minTime: 100                        // Min 100ms between orders
+    });
+    
+    // Handle rate limit errors
+    this.limiter.on('failed', async (error, jobInfo) => {
+      const rateLimitError = error?.response?.status === 429 || error?.code === -1003;
+      if (rateLimitError) {
+        console.warn('[BinanceService] Rate limit hit, pausing for 60 seconds');
+        await this.limiter.stop({ dropWaitingJobs: false });
+        await new Promise(resolve => setTimeout(resolve, 60000));
+        await this.limiter.start();
+        return 60000; // Retry after 60 seconds
+      }
+    });
 
     console.log('[BinanceService] Initialized with base URL:', this.baseUrl);
+    console.log('[BinanceService] ✅ Rate limiting enabled: 1200 req/min, 10 orders/sec');
   }
 
   /**
@@ -202,9 +239,28 @@ class BinanceService {
   }
 
   /**
-   * Make signed request to Binance API with retry logic
+   * Make signed request to Binance API with retry logic and rate limiting
+   * ✅ FIXED: Now uses Bottleneck to prevent hitting Binance rate limits
    */
   private async signedRequest(
+    method: 'GET' | 'POST' | 'DELETE',
+    endpoint: string,
+    params: Record<string, unknown> = {}
+  ): Promise<unknown> {
+    // ✅ Determine which limiter to use
+    const isOrderEndpoint = endpoint.includes('/api/v3/order');
+    const limiter = isOrderEndpoint ? this.orderLimiter : this.limiter;
+    
+    // ✅ Wrap the entire request in rate limiter
+    return await limiter.schedule(async () => {
+      return await this._signedRequestInternal(method, endpoint, params);
+    });
+  }
+  
+  /**
+   * Internal signed request implementation (called by rate limiter)
+   */
+  private async _signedRequestInternal(
     method: 'GET' | 'POST' | 'DELETE',
     endpoint: string,
     params: Record<string, unknown> = {}

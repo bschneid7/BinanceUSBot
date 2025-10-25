@@ -38,7 +38,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
