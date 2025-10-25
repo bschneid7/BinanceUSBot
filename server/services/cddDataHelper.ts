@@ -241,6 +241,46 @@ export class CDDDataHelper {
   }
 
   /**
+   * Get correlation between two symbols
+   * Phase 3: Correlation-Based Risk Management
+   * @param symbol1 First symbol
+   * @param symbol2 Second symbol
+   * @returns Correlation coefficient (-1 to 1) or null if not available
+   */
+  async getCorrelation(symbol1: string, symbol2: string): Promise<number | null> {
+    try {
+      // Same symbol has perfect correlation
+      if (symbol1 === symbol2) {
+        return 1.0;
+      }
+
+      // Try both orderings (Pair-CounterPair and CounterPair-Pair)
+      const query = `
+        SELECT Correlation
+        FROM correlations
+        WHERE (
+          (Pair = ? AND CounterPair = ?)
+          OR (Pair = ? AND CounterPair = ?)
+        )
+        AND Window = '1w'
+        LIMIT 1
+      `;
+
+      const result: any = await this.dbGet(query, [symbol1, symbol2, symbol2, symbol1]);
+
+      if (!result) {
+        // No correlation data available
+        return null;
+      }
+
+      return parseFloat(result.Correlation);
+    } catch (error) {
+      console.error(`[CDDDataHelper] Error getting correlation for ${symbol1}-${symbol2}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Close database connection
    */
   close(): void {
