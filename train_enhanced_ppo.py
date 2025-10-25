@@ -30,7 +30,7 @@ except ImportError:
 # Configuration
 CONFIG = {
     'symbol': 'BTCUSDT',
-    'episodes': 100,  # Start with 100 for testing, increase to 1000 for production
+    'episodes': 200,  # Increased for better convergence
     'lookback_period': 20,
     'max_steps': 500,
     'initial_equity': 10000,
@@ -41,6 +41,9 @@ CONFIG = {
     'batch_size': 64,
     'state_dim': 17,  # 12 original + 5 CDD features
     'action_dim': 4,  # HOLD, BUY, SELL, CLOSE
+    'early_stopping_patience': 20,  # Stop if no improvement for 20 episodes
+    'checkpoint_interval': 10,  # Save model every 10 episodes
+    'min_improvement': 0.01,  # Minimum improvement to reset patience
 }
 
 class CDDDataLoader:
@@ -484,7 +487,16 @@ def train_model(config):
     episode_rewards = []
     start_time = datetime.now()
     
+    # Early stopping variables
+    best_avg_reward = float('-inf')
+    best_model_path = None
+    patience_counter = 0
+    checkpoint_dir = f"/opt/binance-bot/ml_models/checkpoints_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
     print(f"[Training] Starting training for {config['episodes']} episodes...", flush=True)
+    print(f"[Training] Early stopping patience: {config['early_stopping_patience']} episodes", flush=True)
+    print(f"[Training] Checkpoint directory: {checkpoint_dir}", flush=True)
     
     for episode in range(config['episodes']):
         state = env.reset()
@@ -508,7 +520,7 @@ def train_model(config):
         if episode < 5 or (episode + 1) % 5 == 0:
             print(f"[Training] Episode {episode + 1} completed | Steps: {steps} | Reward: {episode_reward:.2f}", flush=True)
         
-        # Log progress
+        # Log progress and check for improvement
         if (episode + 1) % 10 == 0:
             avg_reward = np.mean(episode_rewards[-10:])
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -519,6 +531,31 @@ def train_model(config):
                   f"Actor Loss: {actor_loss:.4f} | "
                   f"Critic Loss: {critic_loss:.4f} | "
                   f"ETA: {int(eta//60)}m {int(eta%60)}s", flush=True)
+            
+            # Early stopping check
+            if avg_reward > best_avg_reward + config['min_improvement']:
+                improvement = avg_reward - best_avg_reward
+                best_avg_reward = avg_reward
+                patience_counter = 0
+                
+                # Save best model
+                best_model_path = f"{checkpoint_dir}/best_model_ep{episode+1}_r{avg_reward:.2f}"
+                agent.save(best_model_path)
+                print(f"[Training] ✅ New best model! Improvement: +{improvement:.2f} | Saved to: {best_model_path}", flush=True)
+            else:
+                patience_counter += 1
+                print(f"[Training] No improvement ({patience_counter}/{config['early_stopping_patience']})", flush=True)
+                
+                if patience_counter >= config['early_stopping_patience']:
+                    print(f"[Training] 🛑 Early stopping triggered after {episode + 1} episodes", flush=True)
+                    print(f"[Training] Best average reward: {best_avg_reward:.2f}", flush=True)
+                    break
+        
+        # Periodic checkpoint
+        if (episode + 1) % config['checkpoint_interval'] == 0:
+            checkpoint_path = f"{checkpoint_dir}/checkpoint_ep{episode+1}"
+            agent.save(checkpoint_path)
+            print(f"[Training] 💾 Checkpoint saved: {checkpoint_path}", flush=True)
                   
     # Save model
     model_dir = f"/opt/binance-bot/ml_models/enhanced_ppo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -530,8 +567,11 @@ def train_model(config):
         'episode_rewards': episode_rewards,
         'avg_reward': float(np.mean(episode_rewards)),
         'final_reward': float(episode_rewards[-1]),
+        'best_avg_reward': float(best_avg_reward),
+        'best_model_path': best_model_path,
         'training_duration': (datetime.now() - start_time).total_seconds(),
-        'model_path': model_dir
+        'model_path': model_dir,
+        'early_stopped': patience_counter >= config['early_stopping_patience']
     }
     
     with open(f"{model_dir}/training_results.json", 'w') as f:

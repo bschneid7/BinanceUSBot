@@ -2,6 +2,12 @@ import express from 'express';
 import { requireUser } from './middlewares/auth';
 import kellyPositionSizer from '../services/kellyPositionSizer';
 import advancedRiskManager from '../services/advancedRiskManager';
+import {
+  validateRequest,
+  KellySizeRequestSchema,
+  PreTradeCheckRequestSchema,
+  DynamicStopRequestSchema
+} from '../validation/riskValidation';
 
 const router = express.Router();
 
@@ -35,29 +41,10 @@ router.get('/stats', requireUser(), async (req, res) => {
  * POST /api/risk/kelly-size
  * Body: { symbol: string, playbook: 'A'|'B'|'C'|'D', stopLossDistance: number }
  */
-router.post('/kelly-size', requireUser(), async (req, res) => {
+router.post('/kelly-size', requireUser(), validateRequest(KellySizeRequestSchema), async (req, res) => {
   try {
     const userId = req.user._id;
-    const { symbol, playbook, stopLossDistance } = req.body;
-    
-    // Validate inputs
-    if (!symbol || !playbook || typeof stopLossDistance !== 'number') {
-      return res.status(400).json({
-        error: 'Invalid parameters. Required: symbol, playbook, stopLossDistance'
-      });
-    }
-    
-    if (!['A', 'B', 'C', 'D'].includes(playbook)) {
-      return res.status(400).json({
-        error: 'Invalid playbook. Must be A, B, C, or D'
-      });
-    }
-    
-    if (stopLossDistance <= 0 || stopLossDistance > 0.5) {
-      return res.status(400).json({
-        error: 'Invalid stopLossDistance. Must be between 0 and 0.5'
-      });
-    }
+    const { symbol, playbook, stopLossDistance } = req.validatedBody;
     
     const result = await kellyPositionSizer.calculatePositionSize(
       userId,
@@ -86,17 +73,10 @@ router.post('/kelly-size', requireUser(), async (req, res) => {
  * POST /api/risk/pre-trade-check
  * Body: { symbol: string, playbook: 'A'|'B'|'C'|'D', proposedSize: number, stopLossDistance: number }
  */
-router.post('/pre-trade-check', requireUser(), async (req, res) => {
+router.post('/pre-trade-check', requireUser(), validateRequest(PreTradeCheckRequestSchema), async (req, res) => {
   try {
     const userId = req.user._id;
-    const { symbol, playbook, proposedSize, stopLossDistance } = req.body;
-    
-    // Validate inputs
-    if (!symbol || !playbook || typeof proposedSize !== 'number' || typeof stopLossDistance !== 'number') {
-      return res.status(400).json({
-        error: 'Invalid parameters. Required: symbol, playbook, proposedSize, stopLossDistance'
-      });
-    }
+    const { symbol, playbook, proposedSize, stopLossDistance } = req.validatedBody;
     
     const result = await advancedRiskManager.preTradeRiskCheck(
       userId,
@@ -155,22 +135,9 @@ router.get('/portfolio-heat', requireUser(), async (req, res) => {
  * POST /api/risk/dynamic-stop
  * Body: { symbol: string, entryPrice: number, side: 'LONG'|'SHORT', atrMultiplier?: number }
  */
-router.post('/dynamic-stop', requireUser(), async (req, res) => {
+router.post('/dynamic-stop', requireUser(), validateRequest(DynamicStopRequestSchema), async (req, res) => {
   try {
-    const { symbol, entryPrice, side, atrMultiplier } = req.body;
-    
-    // Validate inputs
-    if (!symbol || typeof entryPrice !== 'number' || !side) {
-      return res.status(400).json({
-        error: 'Invalid parameters. Required: symbol, entryPrice, side'
-      });
-    }
-    
-    if (!['LONG', 'SHORT'].includes(side)) {
-      return res.status(400).json({
-        error: 'Invalid side. Must be LONG or SHORT'
-      });
-    }
+    const { symbol, entryPrice, side, atrMultiplier } = req.validatedBody;
     
     const stopPrice = await advancedRiskManager.calculateDynamicStopLoss(
       symbol,
