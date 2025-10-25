@@ -4,6 +4,7 @@ import BotState from '../../models/BotState';
 import Signal from '../../models/Signal';
 import { MarketData } from './marketScanner';
 import binanceService from '../binanceService';
+import getCDDHelper from '../cddDataHelper';
 
 export interface TradingSignal {
   symbol: string;
@@ -52,7 +53,12 @@ export class SignalGenerator {
           try {
             const signalA = await this.checkPlaybookA(userId, market, config);
             if (signalA && this.validateSignal(signalA)) {
-              signals.push(signalA);
+              // Phase 1: Funding Rate Filter
+              if (await this.passesFundingFilter(signalA)) {
+                signals.push(signalA);
+              } else {
+                console.log(`[SignalGenerator] Signal filtered by funding rate: ${signalA.symbol} ${signalA.action}`);
+              }
             }
           } catch (error) {
             console.error(`[SignalGenerator] Playbook A failed for ${market.symbol}:`, error);
@@ -64,7 +70,12 @@ export class SignalGenerator {
           try {
             const signalB = await this.checkPlaybookB(userId, market, config);
             if (signalB && this.validateSignal(signalB)) {
-              signals.push(signalB);
+              // Phase 1: Funding Rate Filter
+              if (await this.passesFundingFilter(signalB)) {
+                signals.push(signalB);
+              } else {
+                console.log(`[SignalGenerator] Signal filtered by funding rate: ${signalB.symbol} ${signalB.action}`);
+              }
             }
           } catch (error) {
             console.error(`[SignalGenerator] Playbook B failed for ${market.symbol}:`, error);
@@ -76,7 +87,12 @@ export class SignalGenerator {
           try {
             const signalC = await this.checkPlaybookC(userId, market, config);
             if (signalC && this.validateSignal(signalC)) {
-              signals.push(signalC);
+              // Phase 1: Funding Rate Filter
+              if (await this.passesFundingFilter(signalC)) {
+                signals.push(signalC);
+              } else {
+                console.log(`[SignalGenerator] Signal filtered by funding rate: ${signalC.symbol} ${signalC.action}`);
+              }
             }
           } catch (error) {
             console.error(`[SignalGenerator] Playbook C failed for ${market.symbol}:`, error);
@@ -88,7 +104,12 @@ export class SignalGenerator {
           try {
             const signalD = await this.checkPlaybookD(userId, market, config);
             if (signalD && this.validateSignal(signalD)) {
-              signals.push(signalD);
+              // Phase 1: Funding Rate Filter
+              if (await this.passesFundingFilter(signalD)) {
+                signals.push(signalD);
+              } else {
+                console.log(`[SignalGenerator] Signal filtered by funding rate: ${signalD.symbol} ${signalD.action}`);
+              }
             }
           } catch (error) {
             console.error(`[SignalGenerator] Playbook D failed for ${market.symbol}:`, error);
@@ -501,6 +522,42 @@ export class SignalGenerator {
     }
 
     return true;
+  }
+
+  /**
+   * Phase 1: Funding Rate Filter
+   * Avoid entering positions when funding rates are extreme
+   */
+  private async passesFundingFilter(signal: TradingSignal): Promise<boolean> {
+    try {
+      const cddHelper = getCDDHelper();
+      const fundingExtreme = await cddHelper.getFundingExtreme(signal.symbol);
+
+      // If no funding data available, allow the signal
+      if (fundingExtreme === 0) {
+        return true;
+      }
+
+      // Filter LONG signals when funding is extremely positive (overheated)
+      if (signal.action === 'BUY' && fundingExtreme === 1) {
+        const fundingRate = await cddHelper.getLatestFundingRate(signal.symbol);
+        console.log(`[FundingFilter] Blocking LONG on ${signal.symbol}: funding too high (${(fundingRate! * 100).toFixed(4)}%)`);
+        return false;
+      }
+
+      // Filter SHORT signals when funding is extremely negative (oversold)
+      if (signal.action === 'SELL' && fundingExtreme === -1) {
+        const fundingRate = await cddHelper.getLatestFundingRate(signal.symbol);
+        console.log(`[FundingFilter] Blocking SHORT on ${signal.symbol}: funding too low (${(fundingRate! * 100).toFixed(4)}%)`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`[FundingFilter] Error checking funding for ${signal.symbol}:`, error);
+      // If error, allow signal to pass (fail-open)
+      return true;
+    }
   }
 }
 export default new SignalGenerator();
