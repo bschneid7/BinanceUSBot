@@ -1,0 +1,28 @@
+{
+  "model_path": "/opt/binance-bot/ml_models/checkpoints_20251025_174444/best_model_ep70_r8.16",
+  "days": 30,
+  "initial_equity": 10000,
+  "final_equity": 8478.740717743429,
+  "total_return": -0.15212592822565713,
+  "total_return_pct": -15.212592822565712,
+  "sharpe_ratio": -6.887007477828026,
+  "max_drawdown": -0.2215489076226788,
+  "max_drawdown_pct": -22.15489076226788,
+  "total_trades": 86,
+  "avg_reward": -0.06936907091511213,
+  "total_reward": -11.723372984653949,
+  "action_distribution": {
+    "HOLD": 40,
+    "BUY": 29,
+    "SELL": 57,
+    "CLOSE": 43
+  },
+  "criteria": {
+    "Sharpe Ratio >2.0": false,
+    "Max Drawdown <10%": false,
+    "Positive Returns": false,
+    "Win Rate >55%": true
+  },
+  "all_passed": false,
+  "timestamp": "2025-10-25T19:10:58.557523"
+}

@@ -1,0 +1,20 @@
+{
+  "dataset_size": 2259,
+  "train_size": 1807,
+  "val_size": 452,
+  "features": 36,
+  "lstm_sequences": 2239,
+  "lstm_features": 11,
+  "rf_metrics": {
+    "val_accuracy": 0.38716814159292035,
+    "cv_accuracy": 0.26791447942333296
+  },
+  "xgb_metrics": {
+    "val_accuracy": 0.4004424778761062
+  },
+  "lstm_metrics": {
+    "val_accuracy": 0.3839285671710968,
+    "val_loss": 1.0798866748809814
+  },
+  "timestamp": "2025-10-25T20:08:32.000459"
+}
