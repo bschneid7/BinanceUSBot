@@ -10,6 +10,7 @@ import riskEngine from './riskEngine';
 import makerFirstExecution from '../makerFirstExecution';
 import exchangeInfoCache from '../exchangeInfoCache';
 import policyGuardrails from './policyGuardrails';
+import getCDDHelper from '../cddDataHelper';
 
 export interface OrderResult {
   success: boolean;
@@ -48,6 +49,14 @@ export class ExecutionRouter {
       let orderType: 'LIMIT' | 'MARKET' = 'LIMIT';
       let price = signal.entryPrice;
       let makerFirstResult: any = null;
+
+      // Phase 2: VWAP-Based Entry Timing (only for new positions, not closes)
+      if (!positionId) {
+        price = await this.adjustPriceWithVWAP(signal.symbol, signal.action, signal.entryPrice);
+        if (price !== signal.entryPrice) {
+          logger.info(`[ExecutionRouter] VWAP-adjusted entry: ${signal.entryPrice.toFixed(8)} -> ${price.toFixed(8)}`);
+        }
+      }
 
       // Apply maker-first execution if enabled (adjust price to maker side)
       if (makerFirstExecution.isEnabled() && orderType === 'LIMIT') {
@@ -459,6 +468,58 @@ export class ExecutionRouter {
    */
   async getOpenOrders(userId: Types.ObjectId): Promise<typeof Order.prototype[]> {
     return await Order.find({ userId, status: 'OPEN' });
+  }
+
+  /**
+   * Phase 2: VWAP-Based Entry Timing
+   * Adjust entry price based on VWAP to get better fills
+   */
+  private async adjustPriceWithVWAP(
+    symbol: string,
+    action: 'BUY' | 'SELL',
+    entryPrice: number
+  ): Promise<number> {
+    try {
+      // Only BTC and ETH have VWAP data
+      if (!['BTCUSDT', 'ETHUSDT'].includes(symbol)) {
+        return entryPrice;
+      }
+
+      const cddHelper = getCDDHelper();
+      const vwap = await cddHelper.getLatestVWAP(symbol);
+
+      // If no VWAP data, use original price
+      if (!vwap) {
+        return entryPrice;
+      }
+
+      // For LONG: prefer entry below VWAP (better value)
+      if (action === 'BUY') {
+        // If current price is above VWAP, adjust entry down toward VWAP
+        if (entryPrice > vwap) {
+          const adjustedPrice = vwap + (entryPrice - vwap) * 0.5; // Move halfway to VWAP
+          logger.info(`[VWAPTiming] LONG entry above VWAP: ${entryPrice.toFixed(2)} -> ${adjustedPrice.toFixed(2)} (VWAP: ${vwap.toFixed(2)})`);
+          return adjustedPrice;
+        }
+      }
+
+      // For SHORT: prefer entry above VWAP (better value)
+      if (action === 'SELL') {
+        // If current price is below VWAP, adjust entry up toward VWAP
+        if (entryPrice < vwap) {
+          const adjustedPrice = vwap - (vwap - entryPrice) * 0.5; // Move halfway to VWAP
+          logger.info(`[VWAPTiming] SHORT entry below VWAP: ${entryPrice.toFixed(2)} -> ${adjustedPrice.toFixed(2)} (VWAP: ${vwap.toFixed(2)})`);
+          return adjustedPrice;
+        }
+      }
+
+      // Price is already on the favorable side of VWAP, no adjustment needed
+      return entryPrice;
+    } catch (error) {
+      logger.error(`[VWAPTiming] Error adjusting price for ${symbol}:`, error);
+      // If error, return original price (fail-open)
+      return entryPrice;
+    }
   }
 }
 
