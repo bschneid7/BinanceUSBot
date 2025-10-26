@@ -3,6 +3,7 @@ import binanceService from '../binanceService';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import GridOrder from '../../models/GridOrder';
+import Trade from '../../models/Trade';
 
 /**
  * Grid Trading Strategy
@@ -314,6 +315,9 @@ export class GridTradingService {
           // Update database
           await this.updateGridOrderStatus(level.orderId, 'FILLED');
 
+          // Record trade for tax reporting
+          await this.recordGridTrade(symbol, level, orderStatus);
+
           // Place opposite order
           await this.placeOppositeOrder(level);
         }
@@ -498,6 +502,51 @@ export class GridTradingService {
       });
     } catch (error) {
       logger.error({ err: error }, '[GridTrading] Error saving grid order to database');
+    }
+  }
+
+  /**
+   * Record grid trade for tax reporting
+   */
+  private async recordGridTrade(symbol: string, level: GridLevel, orderStatus: any): Promise<void> {
+    try {
+      // Get user ID from bot config
+      const botConfig = await BotConfig.findOne();
+      if (!botConfig) {
+        logger.error('[GridTrading] Cannot record trade: No bot config found');
+        return;
+      }
+
+      // Calculate fees (0.1% for Binance spot trading)
+      const executedQty = parseFloat(orderStatus.executedQty || '0');
+      const executedPrice = parseFloat(orderStatus.price || level.price);
+      const tradeValue = executedQty * executedPrice;
+      const fees = tradeValue * 0.001; // 0.1% fee
+
+      // Create trade record
+      await Trade.create({
+        userId: botConfig.userId,
+        symbol,
+        side: level.side,
+        quantity: executedQty,
+        price: executedPrice,
+        total: tradeValue,
+        fees,
+        type: 'GRID',
+        orderId: level.orderId,
+        timestamp: new Date(),
+        createdAt: new Date()
+      });
+
+      logger.info({ 
+        symbol, 
+        side: level.side, 
+        qty: executedQty, 
+        price: executedPrice,
+        fees 
+      }, '[GridTrading] Trade recorded for tax reporting');
+    } catch (error) {
+      logger.error({ err: error }, '[GridTrading] Error recording grid trade');
     }
   }
 
