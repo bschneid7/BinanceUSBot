@@ -7,13 +7,12 @@
 
 import mongoose from 'mongoose';
 import GridOrder from '../models/GridOrder';
-import Trade from '../models/Trade';
+import Transaction from '../models/Transaction';
 import BotConfig from '../models/BotConfig';
-import logger from '../utils/logger';
 
-async function backfillGridTrades() {
+async function backfillGridTransactions() {
   try {
-    console.log('=== Backfilling Grid Trades for Tax Reporting ===\n');
+    console.log('=== Backfilling Grid Transactions for Tax Reporting ===\n');
 
     // Connect to MongoDB
     const mongoUri = process.env.MONGO_URI || 'mongodb://admin:changeThisPassword@localhost:27017/binance_bot?authSource=admin';
@@ -40,11 +39,11 @@ async function backfillGridTrades() {
     let skipped = 0;
 
     for (const gridOrder of filledGridOrders) {
-      // Check if trade already exists for this order
-      const existingTrade = await Trade.findOne({ orderId: gridOrder.orderId });
+      // Check if transaction already exists for this order
+      const existingTransaction = await Transaction.findOne({ orderId: gridOrder.orderId });
       
-      if (existingTrade) {
-        console.log(`⏭️  Skipped ${gridOrder.symbol} ${gridOrder.side} - already has trade record`);
+      if (existingTransaction) {
+        console.log(`⏭️  Skipped ${gridOrder.symbol} ${gridOrder.side} - already has transaction record`);
         skipped++;
         continue;
       }
@@ -55,8 +54,8 @@ async function backfillGridTrades() {
       const tradeValue = quantity * price;
       const fees = tradeValue * 0.001; // 0.1% Binance spot fee
 
-      // Create trade record
-      await Trade.create({
+      // Create transaction record
+      await Transaction.create({
         userId: botConfig.userId,
         symbol: gridOrder.symbol,
         side: gridOrder.side,
@@ -66,22 +65,21 @@ async function backfillGridTrades() {
         fees,
         type: 'GRID',
         orderId: gridOrder.orderId,
-        timestamp: gridOrder.filledAt || gridOrder.createdAt || new Date(),
-        createdAt: gridOrder.filledAt || gridOrder.createdAt || new Date()
+        timestamp: gridOrder.filledAt || gridOrder.createdAt || new Date()
       });
 
-      console.log(`✅ Created trade: ${gridOrder.symbol} ${gridOrder.side} ${quantity} @ $${price} (fees: $${fees.toFixed(2)})`);
+      console.log(`✅ Created transaction: ${gridOrder.symbol} ${gridOrder.side} ${quantity} @ $${price} (fees: $${fees.toFixed(2)})`);
       created++;
     }
 
     console.log(`\n=== Backfill Complete ===`);
-    console.log(`✅ Created: ${created} trade records`);
+    console.log(`✅ Created: ${created} transaction records`);
     console.log(`⏭️  Skipped: ${skipped} (already existed)`);
     console.log(`📊 Total: ${filledGridOrders.length} filled grid orders processed`);
 
-    // Verify trades were created
-    const totalTrades = await Trade.countDocuments();
-    console.log(`\n📈 Total trades in database: ${totalTrades}`);
+    // Verify transactions were created
+    const totalTransactions = await Transaction.countDocuments();
+    console.log(`\n📈 Total transactions in database: ${totalTransactions}`);
 
     await mongoose.disconnect();
     console.log('\n✅ Disconnected from MongoDB');
@@ -93,7 +91,7 @@ async function backfillGridTrades() {
 }
 
 // Run the backfill
-backfillGridTrades()
+backfillGridTransactions()
   .then(() => {
     console.log('\n🎉 Backfill completed successfully!');
     process.exit(0);

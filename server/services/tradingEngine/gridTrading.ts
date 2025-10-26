@@ -3,7 +3,7 @@ import binanceService from '../binanceService';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import GridOrder from '../../models/GridOrder';
-import Trade from '../../models/Trade';
+import Transaction from '../../models/Transaction';
 
 /**
  * Grid Trading Strategy
@@ -506,14 +506,14 @@ export class GridTradingService {
   }
 
   /**
-   * Record grid trade for tax reporting
+   * Record grid transaction for tax reporting
    */
   private async recordGridTrade(symbol: string, level: GridLevel, orderStatus: any): Promise<void> {
     try {
       // Get user ID from bot config
       const botConfig = await BotConfig.findOne();
       if (!botConfig) {
-        logger.error('[GridTrading] Cannot record trade: No bot config found');
+        logger.error('[GridTrading] Cannot record transaction: No bot config found');
         return;
       }
 
@@ -523,8 +523,8 @@ export class GridTradingService {
       const tradeValue = executedQty * executedPrice;
       const fees = tradeValue * 0.001; // 0.1% fee
 
-      // Create trade record
-      await Trade.create({
+      // Create transaction record for tax reporting
+      await Transaction.create({
         userId: botConfig.userId,
         symbol,
         side: level.side,
@@ -534,8 +534,7 @@ export class GridTradingService {
         fees,
         type: 'GRID',
         orderId: level.orderId,
-        timestamp: new Date(),
-        createdAt: new Date()
+        timestamp: new Date()
       });
 
       logger.info({ 
@@ -544,9 +543,9 @@ export class GridTradingService {
         qty: executedQty, 
         price: executedPrice,
         fees 
-      }, '[GridTrading] Trade recorded for tax reporting');
+      }, '[GridTrading] Transaction recorded for tax reporting');
     } catch (error) {
-      logger.error({ err: error }, '[GridTrading] Error recording grid trade');
+      logger.error({ err: error }, '[GridTrading] Error recording grid transaction');
     }
   }
 
