@@ -152,18 +152,38 @@ router.get('/ml-status', async (req: Request, res: Response) => {
         // Get ML metrics from MLMonitor
         // Use authenticated user ID or default for development
         const userId = (req as any).user?._id || '000000000000000000000000';
-        const mlMetrics = await MLMonitor.getMetrics(userId, '24h');
         
-        // Get current regime
-        const regimeDetector = new RegimeDetector();
-        const regime = await regimeDetector.detectRegime('BTCUSDT', 100);
+        let mlMetrics, regime, sentiment, recentPredictions;
         
-        // Get sentiment
-        const sentimentAnalyzer = new SentimentAnalyzer();
-        const sentiment = await sentimentAnalyzer.getSentiment();
+        try {
+            mlMetrics = await MLMonitor.getMetrics(userId, '24h');
+        } catch (error) {
+            console.error('[Dashboard] Error getting ML metrics:', error);
+            mlMetrics = null;
+        }
         
-        // Get recent predictions
-        const recentPredictions = await MLMonitor.getRecentPredictions(20);
+        try {
+            const regimeDetector = new RegimeDetector();
+            regime = await regimeDetector.detectRegime('BTCUSDT', 100);
+        } catch (error) {
+            console.error('[Dashboard] Error detecting regime:', error);
+            regime = { regime: 'UNKNOWN', confidence: 0 };
+        }
+        
+        try {
+            const sentimentAnalyzer = new SentimentAnalyzer();
+            sentiment = await sentimentAnalyzer.getSentiment();
+        } catch (error) {
+            console.error('[Dashboard] Error getting sentiment:', error);
+            sentiment = { sentiment: 'NEUTRAL', score: 0 };
+        }
+        
+        try {
+            recentPredictions = await MLMonitor.getRecentPredictions(20);
+        } catch (error) {
+            console.error('[Dashboard] Error getting recent predictions:', error);
+            recentPredictions = [];
+        }
         
         res.json({
             success: true,
@@ -172,7 +192,7 @@ router.get('/ml-status', async (req: Request, res: Response) => {
                 regime,
                 sentiment,
                 recentPredictions,
-                modelsLoaded: true,
+                modelsLoaded: mlMetrics !== null,
                 lastUpdate: new Date()
             }
         });
