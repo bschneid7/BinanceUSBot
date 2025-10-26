@@ -278,6 +278,80 @@ router.post('/update-allocation', requireUser(), async (req, res) => {
 });
 
 /**
+ * GET /api/ml/models
+ * Get ML models with optional filtering
+ */
+router.get('/models', requireUser(), async (req, res) => {
+  try {
+    const { status, isDeployed } = req.query;
+    
+    // For now, return mock data since ML models collection isn't fully implemented
+    // In production, this would query the MLModel collection from database
+    const models = [
+      {
+        _id: '1',
+        name: 'Confidence Scorer v1',
+        version: '1.0.0',
+        type: 'classification',
+        status: 'ACTIVE',
+        isDeployed: true,
+        accuracy: 0.68,
+        precision: 0.72,
+        recall: 0.65,
+        f1Score: 0.68,
+        trainingDataSize: 5000,
+        features: ['price_change', 'volume', 'rsi', 'macd', 'bb_position'],
+        createdAt: new Date('2025-01-01'),
+        lastTrainedAt: new Date('2025-01-15'),
+        description: 'ML model for trade confidence scoring'
+      },
+      {
+        _id: '2',
+        name: 'Regime Detector v1',
+        version: '1.0.0',
+        type: 'classification',
+        status: 'TRAINING',
+        isDeployed: false,
+        accuracy: 0.61,
+        precision: 0.64,
+        recall: 0.59,
+        f1Score: 0.61,
+        trainingDataSize: 3000,
+        features: ['volatility', 'trend_strength', 'volume_profile'],
+        createdAt: new Date('2025-01-10'),
+        lastTrainedAt: new Date('2025-01-20'),
+        description: 'Market regime detection model'
+      }
+    ];
+    
+    // Apply filters if provided
+    let filteredModels = models;
+    if (status) {
+      filteredModels = filteredModels.filter(m => m.status === status);
+    }
+    if (isDeployed !== undefined) {
+      const deployed = isDeployed === 'true' || isDeployed === true;
+      filteredModels = filteredModels.filter(m => m.isDeployed === deployed);
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        models: filteredModels,
+        total: filteredModels.length
+      }
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error fetching models:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch ML models',
+      details: error.message
+    });
+  }
+});
+
+/**
  * GET /api/ml/status
  * Get current ML configuration and status
  */
