@@ -12,6 +12,7 @@ import { Register } from './pages/Register';
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Positions = lazy(() => import('./pages/Positions').then(m => ({ default: m.Positions })));
 const TradeHistory = lazy(() => import('./pages/TradeHistory').then(m => ({ default: m.TradeHistory })));
+const TransactionHistory = lazy(() => import('./pages/TransactionHistory').then(m => ({ default: m.TransactionHistory })));
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
 const Configuration = lazy(() => import('./pages/Configuration').then(m => ({ default: m.Configuration })));
 const Account = lazy(() => import('./pages/Account').then(m => ({ default: m.Account })));
@@ -47,6 +48,7 @@ function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="positions" element={<Positions />} />
                 <Route path="trades" element={<TradeHistory />} />
+                <Route path="transactions" element={<TransactionHistory />} />
                 <Route path="analytics" element={<Analytics />} />
                 <Route path="config" element={<Configuration />} />
                 <Route path="account" element={<Account />} />

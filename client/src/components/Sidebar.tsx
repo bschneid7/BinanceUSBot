@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle, Brain, Hand, Gamepad2 } from 'lucide-react';
+import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle, Brain, Hand, Gamepad2, Receipt } from 'lucide-react';
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Control Center', href: '/control-center', icon: Gamepad2 },
   { name: 'Positions', href: '/positions', icon: Activity },
   { name: 'Trade History', href: '/trades', icon: History },
+  { name: 'Transactions', href: '/transactions', icon: Receipt },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'ML Dashboard', href: '/ml', icon: Brain },
   { name: 'Manual Trade', href: '/manual-trade', icon: Hand },
