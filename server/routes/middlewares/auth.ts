@@ -16,8 +16,8 @@ const requireUser = (allowedRoles: string[] = ALL_ROLES) => {
       console.log('[Auth] No token provided - allowing request (development mode)');
       // Create a mock user for development with valid MongoDB ObjectId format
       req.user = {
-        _id: '000000000000000000000000', // Valid 24-character hex string
-        email: 'dev@localhost',
+        _id: '68fac3bbd5f133b16fce5f47', // Real user ID from database
+        email: 'bschneid7@gmail.com',
         role: 'admin'
       };
       return next();
@@ -44,8 +44,8 @@ const requireUser = (allowedRoles: string[] = ALL_ROLES) => {
       console.log('[Auth] Token validation failed - allowing request (development mode)');
       // TEMPORARY: Allow even if token is invalid
       req.user = {
-        _id: '000000000000000000000000', // Valid 24-character hex string
-        email: 'dev@localhost',
+        _id: '68fac3bbd5f133b16fce5f47', // Real user ID from database
+        email: 'bschneid7@gmail.com',
         role: 'admin'
       };
       next();
