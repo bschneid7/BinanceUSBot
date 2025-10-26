@@ -197,21 +197,53 @@ export class MLMonitor {
     const mlTradesTotal = predictions.filter(p => p.executedTrade).length;
     const lowConfidenceCount = predictions.filter(p => p.confidence < 0.6).length;
     
-    // Get trade performance (simplified - would need actual trade data)
-    const mlWinRate = 0;  // TODO: Calculate from actual trades
-    const mlAvgReturn = 0;  // TODO: Calculate from actual trades
-    const mlSharpeRatio = 0;  // TODO: Calculate from actual trades
-    const mlMaxDrawdown = 0;  // TODO: Calculate from actual trades
-    const mlVsRulesReturnDiff = 0;  // TODO: Calculate comparison
-    const mlVsRulesSharpeDiff = 0;  // TODO: Calculate comparison
+    // Get trade performance from actual trades with ML metadata
+    const Trade = (await import('../models/Trade')).default;
+    const mlTrades = await Trade.find({
+      userId,
+      createdAt: { $gte: startTime, $lte: now },
+      'metadata.mlConfidence': { $exists: true }
+    }).lean();
+    
+    const mlWinRate = mlTrades.length > 0 
+      ? mlTrades.filter(t => t.pnl_usd > 0).length / mlTrades.length 
+      : 0;
+    const mlAvgReturn = mlTrades.length > 0
+      ? mlTrades.reduce((sum, t) => sum + (t.pnl_r || 0), 0) / mlTrades.length
+      : 0;
+    const mlSharpeRatio = mlTrades.length > 2
+      ? this.calculateSharpeRatio(mlTrades.map(t => t.pnl_r || 0))
+      : 0;
+    const mlMaxDrawdown = mlTrades.length > 0
+      ? this.calculateMaxDrawdown(mlTrades.map(t => t.pnl_usd))
+      : 0;
+    
+    // Compare ML trades vs rule-based trades
+    const ruleTrades = await Trade.find({
+      userId,
+      createdAt: { $gte: startTime, $lte: now },
+      'metadata.mlConfidence': { $exists: false }
+    }).lean();
+    
+    const ruleAvgReturn = ruleTrades.length > 0
+      ? ruleTrades.reduce((sum, t) => sum + (t.pnl_r || 0), 0) / ruleTrades.length
+      : 0;
+    const ruleSharpeRatio = ruleTrades.length > 2
+      ? this.calculateSharpeRatio(ruleTrades.map(t => t.pnl_r || 0))
+      : 0;
+    
+    const mlVsRulesReturnDiff = mlAvgReturn - ruleAvgReturn;
+    const mlVsRulesSharpeDiff = mlSharpeRatio - ruleSharpeRatio;
     
     // Get model version (from most recent prediction)
     const modelVersion = predictions.length > 0 
       ? predictions[predictions.length - 1].modelVersion 
       : 'unknown';
     
-    // Get allocation from config (would need to query BotConfig)
-    const allocationPct = 0;  // TODO: Get from BotConfig
+    // Get allocation from config
+    const BotConfig = (await import('../models/BotConfig')).default;
+    const config = await BotConfig.findOne({ userId });
+    const allocationPct = config?.mlAllocation || 0;
     
     return {
       timeRange,
@@ -229,7 +261,7 @@ export class MLMonitor {
       mlVsRulesReturnDiff,
       mlVsRulesSharpeDiff,
       inferenceErrors: errors.filter(e => e.errorType === 'INFERENCE_ERROR').length,
-      fallbackToRulesCount: 0,  // TODO: Track fallbacks
+      fallbackToRulesCount: predictions.filter(p => p.metadata?.fallbackToRules).length,
       lowConfidenceCount,
       modelVersion,
       allocationPct
@@ -370,6 +402,42 @@ export class MLMonitor {
       default:
         return new Date(ms - 24 * 60 * 60 * 1000);
     }
+  }
+  
+  /**
+   * Helper: Calculate Sharpe ratio from returns
+   */
+  private static calculateSharpeRatio(returns: number[]): number {
+    if (returns.length < 2) return 0;
+    
+    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+    
+    if (stdDev === 0) return 0;
+    
+    // Annualized Sharpe ratio (assuming daily returns)
+    return (mean / stdDev) * Math.sqrt(252);
+  }
+  
+  /**
+   * Helper: Calculate maximum drawdown from cumulative PnL
+   */
+  private static calculateMaxDrawdown(pnls: number[]): number {
+    if (pnls.length === 0) return 0;
+    
+    let cumulative = 0;
+    let peak = 0;
+    let maxDrawdown = 0;
+    
+    for (const pnl of pnls) {
+      cumulative += pnl;
+      peak = Math.max(peak, cumulative);
+      const drawdown = (cumulative - peak) / Math.max(Math.abs(peak), 1);
+      maxDrawdown = Math.min(maxDrawdown, drawdown);
+    }
+    
+    return maxDrawdown;
   }
 }
 

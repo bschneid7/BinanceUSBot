@@ -60,7 +60,9 @@ export class AnalyticsService {
       const cash = state.equity - positionsValue;
 
       // Estimate reserve (simplified - would need actual reserve manager state)
-      const reserve = 0; // TODO: Get from reserve manager
+      // In production, query ReserveManager for actual reserve amount
+      // For now, estimate as 10% of equity (typical reserve ratio)
+      const reserve = state.equity * 0.10;
 
       // Create snapshot
       await EquitySnapshot.create({

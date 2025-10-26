@@ -150,7 +150,9 @@ router.get('/performance', async (req: Request, res: Response) => {
 router.get('/ml-status', async (req: Request, res: Response) => {
     try {
         // Get ML metrics from MLMonitor
-        const mlMetrics = await MLMonitor.getMetrics('24h');
+        // Use authenticated user ID or default for development
+        const userId = (req as any).user?._id || '000000000000000000000000';
+        const mlMetrics = await MLMonitor.getMetrics(userId, '24h');
         
         // Get current regime
         const regimeDetector = new RegimeDetector();

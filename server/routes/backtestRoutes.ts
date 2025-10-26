@@ -22,8 +22,8 @@ router.post('/run', async (req, res) => {
       });
     }
 
-    // Get userId from session/auth (for now, use a default)
-    const userId = new Types.ObjectId('000000000000000000000000'); // TODO: Get from auth
+    // Get userId from authenticated user or use default for development
+    const userId = (req as any).user?._id || new Types.ObjectId('000000000000000000000000');
 
     logger.info(`[BacktestAPI] Running backtest for ${symbol} from ${startDate} to ${endDate}`);
 
