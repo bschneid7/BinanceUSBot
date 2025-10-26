@@ -5,6 +5,7 @@ import { BotStatusBadge } from '@/components/dashboard/BotStatusBadge';
 import { PositionsTable } from '@/components/dashboard/PositionsTable';
 import { SignalsList } from '@/components/dashboard/SignalsList';
 import { AlertsList } from '@/components/dashboard/AlertsList';
+import GridTradingDashboard from '@/components/GridTradingDashboard';
 import { getBotStatus, getActivePositions, getRecentSignals, getAlerts } from '@/api/trading';
 import { BotStatus, Position, Signal, Alert } from '@/types/trading';
 import { DollarSign, TrendingUp, TrendingDown, Activity, Wallet, AlertCircle } from 'lucide-react';
@@ -196,6 +197,9 @@ export function Dashboard() {
           <PositionsTable positions={positions} />
         </CardContent>
       </Card>
+
+      {/* Grid Trading Section */}
+      <GridTradingDashboard />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

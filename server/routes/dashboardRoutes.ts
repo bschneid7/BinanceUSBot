@@ -6,6 +6,8 @@ import { MLMonitor } from '../services/mlMonitor';
 import { AdvancedRiskManager } from '../services/advancedRiskManager';
 import { RegimeDetector } from '../services/regimeDetector';
 import { SentimentAnalyzer } from '../services/sentimentAnalyzer';
+import GridOrder from '../models/GridOrder';
+import Transaction from '../models/Transaction';
 
 const router = Router();
 
@@ -491,4 +493,186 @@ function getCorrelationGroup(symbol: string): string {
 }
 
 export default router;
+
+
+
+/**
+ * GET /api/dashboard/grid-trading
+ * Grid trading performance, health, and recent transactions
+ */
+router.get('/grid-trading', async (req: Request, res: Response) => {
+    try {
+        // GridOrder and Transaction imported at top
+        
+        // Get grid order statistics
+        const gridStats = await GridOrder.aggregate([
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+        
+        const openOrders = gridStats.find(s => s._id === 'OPEN')?.count || 0;
+        const filledOrders = gridStats.find(s => s._id === 'FILLED')?.count || 0;
+        const totalOrders = openOrders + filledOrders;
+        
+        // Get grid orders by symbol
+        const ordersBySymbol = await GridOrder.aggregate([
+            {
+                $match: { status: 'OPEN' }
+            },
+            {
+                $group: {
+                    _id: '$symbol',
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { count: -1 }
+            }
+        ]);
+        
+        // Get recent grid transactions (last 50)
+        const gridTransactions = await Transaction.find({ type: 'GRID' })
+            .sort({ timestamp: -1 })
+            .limit(50);
+        
+        // Calculate performance metrics
+        const totalVolume = gridTransactions.reduce((sum, t) => sum + (t.total || 0), 0);
+        const totalFees = gridTransactions.reduce((sum, t) => sum + (t.fees || 0), 0);
+        
+        // Calculate profit from paired grid orders
+        const pairProfits = await calculateGridPairProfits(gridTransactions);
+        const totalProfit = pairProfits.reduce((sum, p) => sum + p.profit, 0);
+        const avgProfitPerCycle = pairProfits.length > 0 ? totalProfit / pairProfits.length : 0;
+        
+        // Get recent activity (last hour)
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const recentOrders = await GridOrder.countDocuments({
+            createdAt: { $gte: oneHourAgo }
+        });
+        const recentFills = await GridOrder.countDocuments({
+            status: 'FILLED',
+            updatedAt: { $gte: oneHourAgo }
+        });
+        
+        // Get most recent order
+        const latestOrder = await GridOrder.findOne().sort({ createdAt: -1 });
+        
+        // Health indicators
+        const isActive = recentOrders > 0 || recentFills > 0;
+        const lastActivityTime = latestOrder?.createdAt || new Date(0);
+        const minutesSinceActivity = Math.floor((Date.now() - lastActivityTime.getTime()) / (1000 * 60));
+        
+        // Health status
+        let healthStatus = 'HEALTHY';
+        let healthMessage = 'Grid trading is active and functioning normally';
+        
+        if (minutesSinceActivity > 60) {
+            healthStatus = 'WARNING';
+            healthMessage = `No activity in ${minutesSinceActivity} minutes`;
+        } else if (minutesSinceActivity > 180) {
+            healthStatus = 'ERROR';
+            healthMessage = `Grid trading appears to be inactive (${Math.floor(minutesSinceActivity / 60)} hours)`;
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                // Overview
+                overview: {
+                    totalOrders,
+                    openOrders,
+                    filledOrders,
+                    successRate: totalOrders > 0 ? (filledOrders / totalOrders * 100).toFixed(1) : 0
+                },
+                
+                // Performance
+                performance: {
+                    totalVolume: totalVolume.toFixed(2),
+                    totalFees: totalFees.toFixed(2),
+                    totalProfit: totalProfit.toFixed(2),
+                    avgProfitPerCycle: avgProfitPerCycle.toFixed(2),
+                    completedCycles: pairProfits.length,
+                    netProfit: (totalProfit - totalFees).toFixed(2)
+                },
+                
+                // By Symbol
+                symbols: ordersBySymbol.map(s => ({
+                    symbol: s._id,
+                    activeOrders: s.count
+                })),
+                
+                // Recent Activity
+                activity: {
+                    lastHour: {
+                        newOrders: recentOrders,
+                        fills: recentFills
+                    },
+                    latestOrder: latestOrder ? {
+                        symbol: latestOrder.symbol,
+                        side: latestOrder.side,
+                        price: latestOrder.price,
+                        time: latestOrder.createdAt
+                    } : null,
+                    minutesSinceActivity
+                },
+                
+                // Health
+                health: {
+                    status: healthStatus,
+                    message: healthMessage,
+                    isActive
+                },
+                
+                // Recent Transactions (last 10 for display)
+                recentTransactions: gridTransactions.slice(0, 10).map(t => ({
+                    symbol: t.symbol,
+                    side: t.side,
+                    quantity: t.quantity,
+                    price: t.price,
+                    total: t.total,
+                    fees: t.fees,
+                    timestamp: t.timestamp,
+                    orderId: t.orderId
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('[Dashboard] Error in /grid-trading:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch grid trading data' });
+    }
+});
+
+// Helper function to calculate profit from paired grid orders
+async function calculateGridPairProfits(transactions: any[]) {
+    const pairs: any[] = [];
+    const buyOrders = transactions.filter(t => t.side === 'BUY');
+    const sellOrders = transactions.filter(t => t.side === 'SELL');
+    
+    // Match buy/sell pairs by symbol and approximate time
+    for (const sell of sellOrders) {
+        const matchingBuy = buyOrders.find(buy => 
+            buy.symbol === sell.symbol &&
+            Math.abs(buy.timestamp.getTime() - sell.timestamp.getTime()) < 24 * 60 * 60 * 1000 // Within 24 hours
+        );
+        
+        if (matchingBuy) {
+            const profit = (sell.price - matchingBuy.price) * sell.quantity - (sell.fees + matchingBuy.fees);
+            pairs.push({
+                symbol: sell.symbol,
+                buyPrice: matchingBuy.price,
+                sellPrice: sell.price,
+                quantity: sell.quantity,
+                profit,
+                spread: sell.price - matchingBuy.price
+            });
+        }
+    }
+    
+    return pairs;
+}
+
 
