@@ -19,30 +19,33 @@ import mlRoutes from './routes/mlRoutes';
 import mlMetricsRoutes from './routes/mlMetricsRoutes';
 import manualTradeRoutes from './routes/manualTradeRoutes';
 import riskRoutes from './routes/riskRoutes';
-import dashboardRoutes from './routes/dashboardRoutes';
-import controlRoutes from './routes/controlRoutes';
-import positionControlRoutes from './routes/positionControlRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
 import logger from './utils/logger';
+
 // Load environment variables
 dotenv.config();
+
 if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
   console.error("Error: MONGO_URI or DATABASE_URL environment variable is missing.");
   process.exit(-1);
 }
+
 const app = express();
 const port = process.env.PORT || 3000;
+
 // Pretty-print JSON responses
 app.enable('json spaces');
 // We want to be consistent with URL paths, so we enable strict routing
 app.enable('strict routing');
 // Disable ETag generation to prevent 304 Not Modified responses
 app.set('etag', false);
+
 app.use(cors({}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 // HTTP request metrics middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
@@ -52,6 +55,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   });
   next();
 });
+
 // Disable caching for API routes
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -59,22 +63,19 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
   res.set('Expires', '0');
   next();
 });
+
 // Database connection
 connectDB();
+
 app.on("error", (error: Error) => {
   console.error(`Server error: ${error.message}`);
   console.error(error.stack);
 });
+
 // API Routes
 app.use('/api/health', basicRoutes);
 // Authentication Routes
 app.use('/api/auth', authRoutes);
-// Dashboard Routes (NEW - Phase 1)
-app.use('/api/dashboard', dashboardRoutes);
-// Control Routes (NEW - Phase 1)
-app.use('/api/control', controlRoutes);
-// Position Control Routes (NEW - Phase 1) - Must come before /api/positions
-app.use('/api/positions', positionControlRoutes);
 // Position Routes
 app.use('/api/positions', positionRoutes);
 // Trade Routes
@@ -99,10 +100,11 @@ app.use('/api/ppo', ppoRoutes);
 app.use('/api/ml', mlRoutes);
 // ML Metrics Routes
 app.use('/api/ml-metrics', mlMetricsRoutes);
-// Manual Trade Routes (NEW - Phase 1)
-app.use('/api/trade', manualTradeRoutes);
-// Risk Routes
+// Manual Trade Routes
+app.use('/api/manual-trade', manualTradeRoutes);
 app.use('/api/risk', riskRoutes);
+app.use("/api/ml", mlRoutes);
+
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {
   try {
@@ -113,10 +115,12 @@ app.get('/metrics', async (req: Request, res: Response) => {
     res.status(500).send('Error generating metrics');
   }
 });
+
 // Health check endpoint
 app.get('/healthz', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
 // Serve static files from React app in production
 // Use dynamic path based on environment
 const clientDistPath = process.env.CLIENT_DIST_PATH || 
@@ -125,17 +129,19 @@ const clientDistPath = process.env.CLIENT_DIST_PATH ||
     : path.join('/opt/binance-bot/client/dist'));
 console.log('Serving static files from:', clientDistPath);
 app.use(express.static(clientDistPath));
+
 // Handle React routing, return all requests to React app
 app.get('*', (req: Request, res: Response) => {
   res.sendFile(path.join(clientDistPath, 'index.html'));
 });
+
 // Error handling
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(`Unhandled application error: ${err.message}`);
   console.error(err.stack);
   res.status(500).send("There was an error serving your request.");
 });
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
-

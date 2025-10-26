@@ -1,9 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle, Brain, Hand } from 'lucide-react';
-
+import { LayoutDashboard, Activity, History, BarChart3, Settings, FileText, AlertTriangle, Brain, Hand, Gamepad2 } from 'lucide-react';
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Control Center', href: '/control-center', icon: Gamepad2 },
   { name: 'Positions', href: '/positions', icon: Activity },
   { name: 'Trade History', href: '/trades', icon: History },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
@@ -14,10 +14,8 @@ const navigation = [
   { name: 'Tax Reports', href: '/tax', icon: FileText },
   { name: 'Controls', href: '/controls', icon: AlertTriangle }
 ];
-
 export function Sidebar() {
   const location = useLocation();
-
   return (
     <div className="flex h-full w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center border-b px-6">

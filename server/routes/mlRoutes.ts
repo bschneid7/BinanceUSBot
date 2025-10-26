@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireUser } from '../middleware/auth';
 import { MLMonitor, MLPredictionLog, MLErrorLog } from '../services/mlMonitor';
-import { BotConfig } from '../models/BotConfig';
+import BotConfig from '../models/BotConfig';
 
 const router = express.Router();
 

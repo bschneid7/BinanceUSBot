@@ -5,9 +5,11 @@ import { Toaster } from './components/ui/toaster';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
+
 // Eager load auth pages (needed immediately)
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+
 // Lazy load all other pages for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Positions = lazy(() => import('./pages/Positions').then(m => ({ default: m.Positions })));
@@ -17,16 +19,17 @@ const Configuration = lazy(() => import('./pages/Configuration').then(m => ({ de
 const Account = lazy(() => import('./pages/Account').then(m => ({ default: m.Account })));
 const TaxReports = lazy(() => import('./pages/TaxReports').then(m => ({ default: m.TaxReports })));
 const Controls = lazy(() => import('./pages/Controls').then(m => ({ default: m.Controls })));
-const ControlCenter = lazy(() => import('./pages/ControlCenter'));
 const MLDashboard = lazy(() => import('./pages/MLDashboard'));
 const ManualTrade = lazy(() => import('./pages/ManualTrade'));
 const BlankPage = lazy(() => import('./pages/BlankPage').then(m => ({ default: m.BlankPage })));
+
 // Loading fallback component
 const PageLoader = () => (
   <div className="flex items-center justify-center h-screen">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
   </div>
 );
+
 function App() {
   return (
     <AuthProvider>
@@ -52,7 +55,6 @@ function App() {
                 <Route path="account" element={<Account />} />
                 <Route path="tax" element={<TaxReports />} />
                 <Route path="controls" element={<Controls />} />
-                <Route path="control-center" element={<ControlCenter />} />
                 <Route path="ml" element={<MLDashboard />} />
                 <Route path="manual-trade" element={<ManualTrade />} />
               </Route>
@@ -65,5 +67,6 @@ function App() {
     </AuthProvider>
   );
 }
+
 export default App;
 
