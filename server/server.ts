@@ -23,6 +23,7 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import controlRoutes from './routes/controlRoutes';
 import positionControlRoutes from './routes/positionControlRoutes';
 import transactionRoutes from './routes/transactions';
+import botActivityRoutes from './routes/botActivityRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
@@ -83,6 +84,7 @@ app.use('/api/trades', tradeRoutes);
 app.use('/api/transactions', transactionRoutes);
 // Bot Routes
 app.use('/api/bot', botRoutes);
+app.use('/api/bot', botActivityRoutes);
 // Signal Routes
 app.use('/api/signals', signalRoutes);
 // Alert Routes

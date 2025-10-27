@@ -6,6 +6,7 @@ import { PositionsTable } from '@/components/dashboard/PositionsTable';
 import { SignalsList } from '@/components/dashboard/SignalsList';
 import { AlertsList } from '@/components/dashboard/AlertsList';
 import GridTradingDashboard from '@/components/GridTradingDashboard';
+import BotActivityFeed from '@/components/BotActivityFeed';
 import { AlertTriangle, Info } from 'lucide-react';
 import { Alert as UIAlert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getBotStatus, getActivePositions, getRecentSignals, getAlerts } from '@/api/trading';
@@ -236,6 +237,9 @@ export function Dashboard() {
 
       {/* Grid Trading Section */}
       <GridTradingDashboard />
+
+      {/* Bot Activity Feed */}
+      <BotActivityFeed />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
