@@ -79,9 +79,33 @@ export class RiskEngine {
         };
       }
 
-      // Check 2: Max positions
+      // Check 2: Max positions with smart rotation (Layer 3 safeguard)
       if (openPositions.length >= config?.risk?.max_positions) {
-        logger.info(`[RiskEngine] REJECTED: Max positions (${config?.risk?.max_positions}) reached`);
+        logger.info(`[RiskEngine] At max positions (${config?.risk?.max_positions}) - checking for rotation opportunity`);
+        
+        // Find worst-performing position (lowest unrealized P&L)
+        const worstPosition = openPositions
+          .filter(p => p.symbol !== 'APEUSD' || p.playbook !== 'MANUAL') // Don't rotate protected positions
+          .sort((a, b) => (a.unrealized_pnl || 0) - (b.unrealized_pnl || 0))[0];
+        
+        if (worstPosition) {
+          const worstPnL = worstPosition.unrealized_pnl || 0;
+          
+          // Only rotate if worst position is losing AND new signal is high quality
+          // For now, we'll be conservative and only rotate if worst is losing > $5
+          const rotationThreshold = -5;
+          
+          if (worstPnL < rotationThreshold) {
+            logger.info(`[RiskEngine] Smart rotation opportunity: Worst position ${worstPosition.symbol} has P&L $${worstPnL.toFixed(2)}`);
+            logger.info(`[RiskEngine] NOTE: Auto-rotation is logged but not executed yet - implement closePosition call if desired`);
+            // TODO: Uncomment to enable auto-rotation
+            // await positionManager.closePosition(worstPosition._id, 'AUTO_ROTATE');
+            // logger.info(`[RiskEngine] Rotated out ${worstPosition.symbol} to make room for ${symbol}`);
+            // return { approved: true }; // Approve new position after rotation
+          }
+        }
+        
+        logger.info(`[RiskEngine] REJECTED: Max positions (${config?.risk?.max_positions}) reached, no rotation opportunity`);
         return {
           approved: false,
           reason: `Maximum ${config?.risk?.max_positions} positions already open`,

@@ -198,6 +198,38 @@ export class PositionManager {
         }
       }
 
+      // Rule 3.5: Auto-close positions without stop-loss (Layer 1 safeguard)
+      if (!position.stop_price || position.stop_price === 0) {
+        const ageHours = (Date.now() - position.opened_at.getTime()) / (1000 * 60 * 60);
+        const autoCloseThreshold = 24; // Close after 24 hours without stop-loss
+        
+        // Check if position is protected (e.g., APEUSD for boost program)
+        const isProtected = position.symbol === 'APEUSD' && position.playbook === 'MANUAL';
+        
+        if (!isProtected && ageHours > autoCloseThreshold) {
+          console.log(`[PositionManager] Auto-closing position without stop-loss: ${position.symbol} (${ageHours.toFixed(1)}h old, threshold ${autoCloseThreshold}h)`);
+          await this.closePosition(positionId, 'AUTO_CLOSE_NO_STOP');
+          return; // Exit early since position is closed
+        }
+      }
+
+      // Rule 3.6: Age-based auto-close (Layer 2 safeguard)
+      const ageHours = (Date.now() - position.opened_at.getTime()) / (1000 * 60 * 60);
+      const maxAge = config?.max_position_age_hours || 72; // Default 72 hours
+      const isProtected = position.symbol === 'APEUSD' && position.playbook === 'MANUAL';
+      
+      if (!isProtected && ageHours > maxAge) {
+        // Don't auto-close if position has significant unrealized profit
+        const profitThreshold = 50; // Don't close if profit > $50
+        if (position.unrealized_pnl < profitThreshold) {
+          console.log(`[PositionManager] Auto-closing stale position: ${position.symbol} (${ageHours.toFixed(1)}h old, limit ${maxAge}h, P&L $${position.unrealized_pnl.toFixed(2)})`);
+          await this.closePosition(positionId, 'AUTO_CLOSE_STALE');
+          return; // Exit early since position is closed
+        } else {
+          console.log(`[PositionManager] Keeping profitable stale position: ${position.symbol} (${ageHours.toFixed(1)}h old, P&L $${position.unrealized_pnl.toFixed(2)})`);
+        }
+      }
+
       // Rule 4: Check stop loss hit
       if (position.current_price && position.stop_price) {
         const stopHit = position.side === 'LONG'

@@ -6,6 +6,8 @@ import { PositionsTable } from '@/components/dashboard/PositionsTable';
 import { SignalsList } from '@/components/dashboard/SignalsList';
 import { AlertsList } from '@/components/dashboard/AlertsList';
 import GridTradingDashboard from '@/components/GridTradingDashboard';
+import { AlertTriangle, Info } from 'lucide-react';
+import { Alert as UIAlert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getBotStatus, getActivePositions, getRecentSignals, getAlerts } from '@/api/trading';
 import { BotStatus, Position, Signal, Alert } from '@/types/trading';
 import { DollarSign, TrendingUp, TrendingDown, Activity, Wallet, AlertCircle } from 'lucide-react';
@@ -80,6 +82,40 @@ export function Dashboard() {
         </div>
         <BotStatusBadge status={botStatus.status} />
       </div>
+
+      {/* Layer 4: Dashboard Warning Banners */}
+      {botStatus.openPositions >= botStatus.maxPositions && (
+        <UIAlert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Bot Blocked - Maximum Positions Reached</AlertTitle>
+          <AlertDescription>
+            You have {botStatus.openPositions} open positions (limit: {botStatus.maxPositions}). 
+            The bot cannot open new trades until positions are closed. Close at least one position to resume trading.
+          </AlertDescription>
+        </UIAlert>
+      )}
+
+      {botStatus.openPositions >= (botStatus.maxPositions * 0.8) && botStatus.openPositions < botStatus.maxPositions && (
+        <UIAlert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Approaching Position Limit</AlertTitle>
+          <AlertDescription>
+            You have {botStatus.openPositions} of {botStatus.maxPositions} positions open ({((botStatus.openPositions / botStatus.maxPositions) * 100).toFixed(0)}%). 
+            Consider closing some positions to make room for new high-quality signals.
+          </AlertDescription>
+        </UIAlert>
+      )}
+
+      {positions.filter(p => (!p.stop_price || p.stop_price === 0) && p.symbol !== 'APEUSD').length > 0 && (
+        <UIAlert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Positions Without Stop-Loss Detected</AlertTitle>
+          <AlertDescription>
+            {positions.filter(p => (!p.stop_price || p.stop_price === 0) && p.symbol !== 'APEUSD').length} position(s) have no stop-loss set. 
+            These will be automatically closed after 24 hours. Set stop-loss immediately to protect your capital.
+          </AlertDescription>
+        </UIAlert>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatusCard
