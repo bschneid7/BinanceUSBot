@@ -1,85 +1,141 @@
 import { Types } from 'mongoose';
-import botStatusService from './botStatusService';
+import mongoose from 'mongoose';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const nodemailer = require('nodemailer');
 import Position from '../models/Position';
-import emailService from './emailService';
+import Trade from '../models/Trade';
+import BotConfig from '../models/BotConfig';
+import depositService from '../services/depositService';
 
 /**
- * Daily Report Service
- * Generates and sends daily P&L reports
+ * Standalone Daily Report Script
+ * Can be run manually or via cron
  */
-class DailyReportService {
-  /**
-   * Generate and send daily P&L report
-   */
-  async sendDailyReport(userId: Types.ObjectId): Promise<void> {
-    try {
-      console.log('[DailyReport] Generating daily P&L report...');
 
-      // Get bot status
-      const status = await botStatusService.getBotStatus(userId);
+const USER_ID = new Types.ObjectId('68fac3bbd5f133b16fce5f47');
 
-      // Get top positions by P&L
-      const positions = await Position.find({ userId, status: 'OPEN' })
-        .sort({ unrealized_pnl: -1 })
-        .limit(10);
+async function sendDailyReport() {
+  try {
+    console.log('[DailyReport] Connecting to database...');
+    const mongoUri = process.env.MONGO_URI || 'mongodb://mongo:27017/binance_bot';
+    await mongoose.connect(mongoUri);
+    console.log('[DailyReport] Connected');
 
-      // Generate HTML email
-      const html = this.generateHtmlReport(status, positions);
-      const subject = this.generateSubject(status);
+    // Get bot status
+    console.log('[DailyReport] Fetching bot status...');
+    const openPositions = await Position.find({ userId: USER_ID, status: 'OPEN' });
+    const config = await BotConfig.findOne({ userId: USER_ID });
+    
+    const totalUnrealizedPnl = openPositions.reduce((sum, pos) => sum + (pos.unrealized_pnl || 0), 0);
+    const startingCapital = await depositService.getNetDeposits(USER_ID);
+    const allTrades = await Trade.find({ userId: USER_ID });
+    const totalRealizedPnl = allTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
+    const equity = startingCapital + totalRealizedPnl + totalUnrealizedPnl;
+    const totalPnl = totalRealizedPnl + totalUnrealizedPnl;
+    const totalPnlPct = startingCapital > 0 ? (totalPnl / startingCapital) * 100 : 0;
 
-      // Send email
-      const sent = await emailService.sendEmail(subject, html);
+    // Get daily P&L
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const dailyTrades = await Trade.find({ userId: USER_ID, date: { $gte: startOfDay } });
+    const dailyPnl = dailyTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
 
-      if (sent) {
-        console.log('[DailyReport] Daily report sent successfully');
-      } else {
-        console.log('[DailyReport] Daily report not sent (email disabled or failed)');
-      }
-    } catch (error) {
-      console.error('[DailyReport] Error generating daily report:', error);
-    }
-  }
+    // Get weekly P&L
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const weeklyTrades = await Trade.find({ userId: USER_ID, date: { $gte: startOfWeek } });
+    const weeklyPnl = weeklyTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
 
-  /**
-   * Generate email subject line
-   */
-  private generateSubject(status: any): string {
-    const date = new Date().toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+    const status = {
+      status: config?.botStatus || 'ACTIVE',
+      equity: Math.round(equity * 100) / 100,
+      startingCapital: Math.round(startingCapital * 100) / 100,
+      totalPnl: Math.round(totalPnl * 100) / 100,
+      totalPnlPct: Math.round(totalPnlPct * 100) / 100,
+      dailyPnl: Math.round(dailyPnl * 100) / 100,
+      weeklyPnl: Math.round(weeklyPnl * 100) / 100,
+      openPositions: openPositions.length,
+      availableCapital: equity - openPositions.reduce((sum, pos) => sum + Math.abs(pos.position_size_usd || 0), 0),
+      reserveLevel: 0,
+      totalExposurePct: 0,
+      totalOpenRiskR: 0,
+      dailyPnlR: 0,
+      weeklyPnlR: 0
+    };
+
+    // Sort positions by P&L
+    const topPositions = openPositions.sort((a, b) => (b.unrealized_pnl || 0) - (a.unrealized_pnl || 0)).slice(0, 5);
+
+    console.log('[DailyReport] Sending email...');
+    
+    // Generate email
+    const subject = generateSubject(status);
+    const html = generateHtmlReport(status, topPositions);
+
+    // Send via SendGrid
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      auth: {
+        user: 'apikey',
+        pass: process.env.SENDGRID_API_KEY,
+      },
     });
 
-    const pnlEmoji = status.totalPnl >= 0 ? '📈' : '📉';
-    const pnlSign = status.totalPnl >= 0 ? '+' : '';
-
-    return `${pnlEmoji} Trading Bot Daily Report - ${date} | P&L: ${pnlSign}$${status.totalPnl.toFixed(2)} (${pnlSign}${status.totalPnlPct.toFixed(2)}%)`;
-  }
-
-  /**
-   * Generate HTML email body
-   */
-  private generateHtmlReport(status: any, positions: any[]): string {
-    const date = new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || 'bot@binance-trading.com',
+      to: process.env.EMAIL_TO || 'bschneid7@gmail.com',
+      subject,
+      html,
     });
 
-    const pnlColor = status.totalPnl >= 0 ? '#10b981' : '#ef4444';
-    const dailyPnlColor = status.dailyPnl >= 0 ? '#10b981' : '#ef4444';
-    const weeklyPnlColor = status.weeklyPnl >= 0 ? '#10b981' : '#ef4444';
+    console.log('[DailyReport] ✅ Email sent successfully!');
+    
+    await mongoose.disconnect();
+    process.exit(0);
+  } catch (error) {
+    console.error('[DailyReport] ❌ Error:', error);
+    await mongoose.disconnect();
+    process.exit(1);
+  }
+}
 
-    const statusBadgeColor = {
-      'ACTIVE': '#10b981',
-      'HALTED_DAILY': '#f59e0b',
-      'HALTED_WEEKLY': '#ef4444',
-      'STOPPED': '#6b7280'
-    }[status.status] || '#6b7280';
+function generateSubject(status: any): string {
+  const date = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
 
-    return `
+  const pnlEmoji = status.totalPnl >= 0 ? '📈' : '📉';
+  const pnlSign = status.totalPnl >= 0 ? '+' : '';
+
+  return `${pnlEmoji} Trading Bot Daily Report - ${date} | P&L: ${pnlSign}$${status.totalPnl.toFixed(2)} (${pnlSign}${status.totalPnlPct.toFixed(2)}%)`;
+}
+
+function generateHtmlReport(status: any, positions: any[]): string {
+  const date = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  const pnlColor = status.totalPnl >= 0 ? '#10b981' : '#ef4444';
+  const dailyPnlColor = status.dailyPnl >= 0 ? '#10b981' : '#ef4444';
+  const weeklyPnlColor = status.weeklyPnl >= 0 ? '#10b981' : '#ef4444';
+
+  const statusBadgeColor = {
+    'ACTIVE': '#10b981',
+    'HALTED_DAILY': '#f59e0b',
+    'HALTED_WEEKLY': '#ef4444',
+    'STOPPED': '#6b7280'
+  }[status.status] || '#6b7280';
+
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -164,9 +220,6 @@ class DailyReportService {
                     <div style="font-size: 20px; font-weight: 700; color: ${dailyPnlColor};">
                       ${status.dailyPnl >= 0 ? '+' : ''}$${status.dailyPnl.toFixed(2)}
                     </div>
-                    <div style="font-size: 14px; color: #6b7280; margin-top: 2px;">
-                      ${status.dailyPnlR >= 0 ? '+' : ''}${status.dailyPnlR.toFixed(2)}R
-                    </div>
                   </td>
                   <td width="4%"></td>
                   <td width="48%" style="background-color: #f9fafb; border-radius: 6px; padding: 15px;">
@@ -174,66 +227,32 @@ class DailyReportService {
                     <div style="font-size: 20px; font-weight: 700; color: ${weeklyPnlColor};">
                       ${status.weeklyPnl >= 0 ? '+' : ''}$${status.weeklyPnl.toFixed(2)}
                     </div>
-                    <div style="font-size: 14px; color: #6b7280; margin-top: 2px;">
-                      ${status.weeklyPnlR >= 0 ? '+' : ''}${status.weeklyPnlR.toFixed(2)}R
-                    </div>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- Portfolio Metrics -->
+          <!-- Open Positions -->
           <tr>
             <td style="padding: 0 30px 20px 30px;">
-              <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #1f2937;">Portfolio Metrics</h3>
-              <table width="100%" cellpadding="8" cellspacing="0" style="background-color: #f9fafb; border-radius: 6px;">
-                <tr>
-                  <td style="font-size: 13px; color: #6b7280;">Open Positions</td>
-                  <td align="right" style="font-size: 14px; font-weight: 600; color: #1f2937;">${status.openPositions}</td>
-                </tr>
-                <tr>
-                  <td style="font-size: 13px; color: #6b7280;">Available Capital</td>
-                  <td align="right" style="font-size: 14px; font-weight: 600; color: #1f2937;">$${status.availableCapital.toFixed(2)}</td>
-                </tr>
-                <tr>
-                  <td style="font-size: 13px; color: #6b7280;">Reserve Level</td>
-                  <td align="right" style="font-size: 14px; font-weight: 600; color: #1f2937;">${status.reserveLevel.toFixed(1)}%</td>
-                </tr>
-                <tr>
-                  <td style="font-size: 13px; color: #6b7280;">Total Exposure</td>
-                  <td align="right" style="font-size: 14px; font-weight: 600; color: #1f2937;">${status.totalExposurePct.toFixed(1)}%</td>
-                </tr>
-                <tr>
-                  <td style="font-size: 13px; color: #6b7280;">Total Risk (R)</td>
-                  <td align="right" style="font-size: 14px; font-weight: 600; color: #1f2937;">${status.totalOpenRiskR.toFixed(2)}R</td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Top Positions -->
-          ${positions.length > 0 ? `
-          <tr>
-            <td style="padding: 0 30px 20px 30px;">
-              <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #1f2937;">Top Positions by P&L</h3>
+              <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #1f2937;">Open Positions: ${status.openPositions}</h3>
+              ${positions.length > 0 ? `
               <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
                 <thead>
                   <tr style="background-color: #f9fafb;">
                     <th style="padding: 10px; text-align: left; font-size: 12px; font-weight: 600; color: #6b7280; border-bottom: 1px solid #e5e7eb;">Symbol</th>
                     <th style="padding: 10px; text-align: right; font-size: 12px; font-weight: 600; color: #6b7280; border-bottom: 1px solid #e5e7eb;">Side</th>
-                    <th style="padding: 10px; text-align: right; font-size: 12px; font-weight: 600; color: #6b7280; border-bottom: 1px solid #e5e7eb;">Size</th>
                     <th style="padding: 10px; text-align: right; font-size: 12px; font-weight: 600; color: #6b7280; border-bottom: 1px solid #e5e7eb;">P&L</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${positions.slice(0, 5).map(pos => {
+                  ${positions.map(pos => {
                     const posColor = (pos.unrealized_pnl || 0) >= 0 ? '#10b981' : '#ef4444';
                     return `
                     <tr>
                       <td style="padding: 10px; font-size: 13px; font-weight: 600; color: #1f2937; border-bottom: 1px solid #f3f4f6;">${pos.symbol}</td>
                       <td style="padding: 10px; text-align: right; font-size: 13px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">${pos.side}</td>
-                      <td style="padding: 10px; text-align: right; font-size: 13px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">$${Math.abs(pos.position_size_usd || 0).toFixed(0)}</td>
                       <td style="padding: 10px; text-align: right; font-size: 13px; font-weight: 600; color: ${posColor}; border-bottom: 1px solid #f3f4f6;">
                         ${(pos.unrealized_pnl || 0) >= 0 ? '+' : ''}$${(pos.unrealized_pnl || 0).toFixed(2)}
                       </td>
@@ -242,9 +261,9 @@ class DailyReportService {
                   }).join('')}
                 </tbody>
               </table>
+              ` : '<p style="color: #6b7280;">No open positions</p>'}
             </td>
           </tr>
-          ` : ''}
 
           <!-- Footer -->
           <tr>
@@ -264,9 +283,8 @@ class DailyReportService {
   </table>
 </body>
 </html>
-    `;
-  }
+  `;
 }
 
-export default new DailyReportService();
+sendDailyReport();
 

@@ -28,7 +28,7 @@ import snapshotRoutes from './routes/snapshotRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { connectDB } from './config/database';
 import { initializeSnapshotCron } from './utils/snapshotCron';
-import { initializeDailyReportCron } from './cron/dailyReportCron';
+// import { initializeDailyReportCron } from './cron/dailyReportCron';
 import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
 import logger from './utils/logger';
@@ -153,6 +153,6 @@ app.listen(port, () => {
   initializeSnapshotCron();
   
   // Initialize daily P&L report cron job
-  initializeDailyReportCron();
+  // initializeDailyReportCron(); // Disabled until dependencies are installed
 });
 

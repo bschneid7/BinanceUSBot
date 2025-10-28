@@ -40,6 +40,11 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-in-production}
       BINANCE_US_API_KEY: ${BINANCE_US_API_KEY:-}
       BINANCE_US_API_SECRET: ${BINANCE_US_API_SECRET:-}
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-sendgrid}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_TO: ${EMAIL_TO:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
     ports:
       - "${APP_PORT:-3000}:3000"
     depends_on:
