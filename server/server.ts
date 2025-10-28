@@ -26,7 +26,7 @@ import transactionRoutes from './routes/transactions';
 import botActivityRoutes from './routes/botActivityRoutes';
 import snapshotRoutes from './routes/snapshotRoutes';
 import { connectDB } from './config/database';
-// import { initializeSnapshotCron } from './utils/snapshotCron';
+import { initializeSnapshotCron } from './utils/snapshotCron';
 import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
 import logger from './utils/logger';
@@ -147,6 +147,6 @@ app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
   
   // Initialize daily snapshot cron job
-  // initializeSnapshotCron(); // TODO: Install node-cron first
+  initializeSnapshotCron();
 });
 
