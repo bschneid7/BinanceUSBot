@@ -185,12 +185,16 @@ router.post('/bot/emergency-stop', async (req: Request, res: Response) => {
 router.get('/bot/status', async (req: Request, res: Response) => {
     try {
         const botState = await BotState.findOne();
+        const botConfig = await BotConfig.findOne();
         const openPositions = await Position.countDocuments({ status: 'OPEN' });
+        
+        // Use BotConfig.botStatus for consistency with dashboard
+        const isActive = botConfig?.botStatus === 'ACTIVE' || botState?.isRunning || false;
         
         res.json({
             success: true,
             data: {
-                isActive: botState?.isActive || false,
+                isActive,
                 totalEquity: botState?.totalEquity || 0,
                 openPositions,
                 lastUpdate: botState?.updatedAt || new Date()
