@@ -143,36 +143,47 @@ export class MultiPairGridTradingService {
           logger.info({ pairCount: this.configs.size }, '[GridTrading] Multi-pair configuration loaded');
         }
       } else {
-        // Set default multi-pair configuration
+        // Calculate dynamic grid bounds based on current prices
+        // This prevents hardcoded bounds from becoming outdated
+        const btcPrice = await this.getCurrentPrice('BTCUSD');
+        const ethPrice = await this.getCurrentPrice('ETHUSD');
+        const solPrice = await this.getCurrentPrice('SOLUSD');
+
         const defaultConfig: MultiPairGridConfig = {
           enabled: true,
           pairs: [
             {
               symbol: 'BTCUSD',
-              lowerBound: 105000,
-              upperBound: 117000,
+              lowerBound: Math.round(btcPrice * 0.92), // 8% below current
+              upperBound: Math.round(btcPrice * 1.08), // 8% above current
               gridLevels: 15,
               orderSize: 200,
               enabled: true
             },
             {
               symbol: 'ETHUSD',
-              lowerBound: 3700,
-              upperBound: 4200,
+              lowerBound: Math.round(ethPrice * 0.90), // 10% below current
+              upperBound: Math.round(ethPrice * 1.10), // 10% above current
               gridLevels: 10,
               orderSize: 100,
               enabled: true
             },
             {
               symbol: 'SOLUSD',
-              lowerBound: 185,
-              upperBound: 205,
+              lowerBound: Math.round(solPrice * 0.90), // 10% below current
+              upperBound: Math.round(solPrice * 1.10), // 10% above current
               gridLevels: 8,
               orderSize: 60,
               enabled: true
             }
           ]
         };
+        
+        logger.info({ 
+          btcBounds: [defaultConfig.pairs[0].lowerBound, defaultConfig.pairs[0].upperBound],
+          ethBounds: [defaultConfig.pairs[1].lowerBound, defaultConfig.pairs[1].upperBound],
+          solBounds: [defaultConfig.pairs[2].lowerBound, defaultConfig.pairs[2].upperBound]
+        }, '[GridTrading] Calculated dynamic grid bounds');
         
         // Save default config to database
         botConfig.gridTradingMultiPair = defaultConfig;

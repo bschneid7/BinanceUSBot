@@ -100,13 +100,10 @@ class BotStatusService {
       // Get starting equity from BotState (synced from Binance)
       const botState = await BotState.findOne({ userId });
       
-      // Use startingEquity field (initial deposit), not current equity
-      // If startingEquity not set, initialize it to 15000 (actual account starting balance)
-      let startingEquity = botState?.startingEquity;
-      if (!startingEquity || startingEquity === 7000) {
-        // Fix incorrect starting equity (was hardcoded to 7000)
-        startingEquity = 15000;
-        console.log(`[BotStatusService] Initializing startingEquity to $${startingEquity}`);
+      // Get starting equity from BotState (must be properly initialized)
+      const startingEquity = botState?.startingEquity;
+      if (!startingEquity || startingEquity <= 0) {
+        throw new Error('BotState not properly initialized - starting equity missing. Run initialization service first.');
       }
       
       const equity = startingEquity + totalRealizedPnl + totalUnrealizedPnl;
@@ -163,6 +160,9 @@ class BotStatusService {
       const botStatus: BotStatusMetrics = {
         status,
         equity: Math.round(equity * 100) / 100,
+        startingEquity: Math.round(startingEquity * 100) / 100,
+        currentR: Math.round((botState?.currentR || 0) * 100) / 100,
+        totalPnl: Math.round((equity - startingEquity) * 100) / 100,
         availableCapital: Math.round(availableCapital * 100) / 100,
         dailyPnl: Math.round(dailyPnl * 100) / 100,
         dailyPnlR: Math.round(dailyPnlR * 100) / 100,

@@ -25,6 +25,7 @@ import positionControlRoutes from './routes/positionControlRoutes';
 import transactionRoutes from './routes/transactions';
 import botActivityRoutes from './routes/botActivityRoutes';
 import snapshotRoutes from './routes/snapshotRoutes';
+import adminRoutes from './routes/adminRoutes';
 import { connectDB } from './config/database';
 import { initializeSnapshotCron } from './utils/snapshotCron';
 import cors from 'cors';
@@ -107,6 +108,7 @@ app.use('/api/ml', mlRoutes);
 app.use('/api/ml-metrics', mlMetricsRoutes);
 // Admin routes
 app.use('/api/admin/snapshot', snapshotRoutes);
+app.use('/api/admin', adminRoutes);
 // Manual Trade Routes (NEW - Phase 1)
 app.use('/api/trade', manualTradeRoutes);
 // Risk Routes

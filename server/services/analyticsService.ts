@@ -11,7 +11,6 @@ import snapshotService from './snapshotService';
  */
 
 export class AnalyticsService {
-  private readonly INITIAL_DEPOSIT = 15000;
 
   /**
    * Get performance statistics for a date range

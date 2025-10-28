@@ -48,17 +48,17 @@ const schema = new Schema<IBotState>({
   startingEquity: {
     type: Number,
     required: true,
-    default: 7000,
+    // No default - must be set during initialization
   },
   equity: {
     type: Number,
     required: true,
-    default: 7000,
+    // No default - calculated from positions and P&L
   },
   currentR: {
     type: Number,
     required: true,
-    default: 42,
+    // No default - calculated from equity and risk percentage
   },
   dailyPnl: {
     type: Number,

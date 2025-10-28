@@ -398,12 +398,17 @@ export class PositionManager {
 
         // 4. Get BotState for R calculation
         let state = await BotState.findOne({ userId: position.userId }).session(session);
-        let currentR = 42; // Default fallback
         
+        // Calculate R from equity and risk percentage (0.6%)
+        let currentR: number;
         if (state && state.currentR && state.currentR > 0) {
           currentR = state.currentR;
+        } else if (state && state.equity && state.equity > 0) {
+          // Calculate R as 0.6% of equity
+          currentR = state.equity * 0.006;
+          console.log(`[PositionManager] Calculated R from equity: $${currentR.toFixed(2)}`);
         } else {
-          console.warn(`[PositionManager] Invalid currentR, using default value`);
+          throw new Error('BotState not properly initialized - cannot calculate R value');
         }
         
         const realizedR = currentR > 0 ? realizedPnl / currentR : 0;

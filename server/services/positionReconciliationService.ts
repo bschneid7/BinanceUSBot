@@ -206,7 +206,19 @@ class PositionReconciliationService {
         // Alert if significant issues found
         if (result.missingInDatabase.length > 0 || result.missingInBinance.length > 2 || result.discrepancies.length > 0) {
           console.warn('[Reconciliation] Significant discrepancies found:', result);
-          // TODO: Send alert to user
+          
+          // Send warning alert
+          const alertService = (await import('./alertService')).default;
+          await alertService.warning(
+            'Position Reconciliation Discrepancies Detected',
+            `Found ${result.missingInDatabase.length} positions missing in database, ${result.missingInBinance.length} missing in Binance, and ${result.discrepancies.length} discrepancies.`,
+            {
+              missingInDatabase: result.missingInDatabase.length,
+              missingInBinance: result.missingInBinance.length,
+              discrepancies: result.discrepancies.length,
+              details: result
+            }
+          );
         }
       } catch (error) {
         console.error('[Reconciliation] Periodic reconciliation error:', error);

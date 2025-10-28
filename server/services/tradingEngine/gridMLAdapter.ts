@@ -297,10 +297,23 @@ class GridMLAdapter {
 
       // Get portfolio context
       const botState = await BotState.findOne({ userId: this.userId });
+      
+      // Calculate actual playbook activity level
+      const Position = (await import('../../models/Position')).default;
+      const openPositions = await Position.find({ userId: this.userId, status: 'OPEN' });
+      const playbookPositions = openPositions.filter(p => p.playbook && p.playbook !== 'GRID');
+      const playbookActivityLevel = playbookPositions.length / Math.max(openPositions.length, 1);
+      
+      // Calculate actual reserve cash percentage
+      const totalEquity = botState?.equity || 0;
+      const positionsValue = openPositions.reduce((sum, p) => sum + Math.abs(p.position_size_usd || 0), 0);
+      const reserveCash = totalEquity - positionsValue;
+      const reserveCashPct = totalEquity > 0 ? (reserveCash / totalEquity) * 100 : 30;
+      
       const portfolioContext = {
-        playbookActivityLevel: 0.5, // TODO: Calculate from active playbook trades
-        totalExposure: botState?.equity || 0,
-        reserveCashPct: 30, // TODO: Get from actual reserve
+        playbookActivityLevel,
+        totalExposure: totalEquity,
+        reserveCashPct,
       };
 
       // Prepare state vector

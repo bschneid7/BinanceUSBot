@@ -9,7 +9,6 @@ import EquitySnapshot from '../models/EquitySnapshot';
  * Handles creation and management of daily equity snapshots
  */
 class SnapshotService {
-  private readonly INITIAL_DEPOSIT = 15000;
 
   /**
    * Create equity snapshot for a specific date
@@ -43,8 +42,15 @@ class SnapshotService {
       const realizedPnl = allTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
       console.log(`[SnapshotService] Realized P&L: $${realizedPnl.toFixed(2)} from ${allTrades.length} trades`);
 
+      // Get starting equity from BotState
+      const botState = await BotState.findOne({ userId });
+      const startingEquity = botState?.startingEquity;
+      if (!startingEquity || startingEquity <= 0) {
+        throw new Error('BotState not initialized - starting equity missing');
+      }
+
       // Calculate current equity
-      const currentEquity = this.INITIAL_DEPOSIT + realizedPnl + unrealizedPnl;
+      const currentEquity = startingEquity + realizedPnl + unrealizedPnl;
       const cash = currentEquity - positionsValue;
       const reserve = cash; // Simplified
 
@@ -59,8 +65,8 @@ class SnapshotService {
       const profitFactor = avgLoss > 0 ? (avgWin * wins.length) / (avgLoss * losses.length) : 0;
 
       // Calculate total P&L
-      const totalPnl = currentEquity - this.INITIAL_DEPOSIT;
-      const totalPnlPct = (totalPnl / this.INITIAL_DEPOSIT) * 100;
+      const totalPnl = currentEquity - startingEquity;
+      const totalPnlPct = (totalPnl / startingEquity) * 100;
 
       // Get previous snapshot for daily/weekly P&L calculation
       const previousSnapshot = await EquitySnapshot.findOne({ userId, date: { $lt: snapshotDate } })
@@ -146,7 +152,7 @@ class SnapshotService {
    * Get equity at a specific date
    * @param userId - User ID
    * @param date - Target date
-   * @returns Equity value, or INITIAL_DEPOSIT if no snapshot found
+   * @returns Equity value, or starting equity from BotState if no snapshot found
    */
   async getEquityAtDate(userId: Types.ObjectId, date: Date): Promise<number> {
     const snapshot = await EquitySnapshot.findOne({
@@ -154,7 +160,17 @@ class SnapshotService {
       date: { $lte: date }
     }).sort({ date: -1 }).limit(1);
 
-    return snapshot?.equity || this.INITIAL_DEPOSIT;
+    if (snapshot) {
+      return snapshot.equity;
+    }
+
+    // No snapshot found, return starting equity from BotState
+    const botState = await BotState.findOne({ userId });
+    const startingEquity = botState?.startingEquity;
+    if (!startingEquity || startingEquity <= 0) {
+      throw new Error('BotState not initialized - starting equity missing');
+    }
+    return startingEquity;
   }
 
   /**

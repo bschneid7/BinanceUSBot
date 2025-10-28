@@ -46,8 +46,8 @@ export class TradingEngine {
         botState = await BotState.create({
           userId,
           isRunning: true,
-          equity: 7000,
-          currentR: 42,
+          equity: 0, // Will be initialized by botInitializationService
+          currentR: 0, // Will be calculated from equity
           dailyPnl: 0,
           dailyPnlR: 0,
           weeklyPnl: 0,
@@ -510,9 +510,11 @@ export class TradingEngine {
       });
 
       // Use existing equity from BotState
-      // The equity should be synced manually using the balance sync script
-      // or updated when Binance API credentials are configured
-      let baseEquity = state.equity ?? 7000; // Use existing equity as fallback
+      // Get equity from BotState (must be properly initialized)
+      let baseEquity = state.equity;
+      if (!baseEquity || baseEquity <= 0) {
+        throw new Error('BotState equity not initialized. Run botInitializationService first.');
+      }
       
       // Only attempt to sync from Binance if API is properly configured
       if (binanceService.isConfigured()) {

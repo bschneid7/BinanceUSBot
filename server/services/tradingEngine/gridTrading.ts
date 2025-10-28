@@ -450,7 +450,10 @@ export class GridTradingService {
       }
 
       // Allocate 20% of equity for grid trading (as recommended)
-      const totalEquity = botState.equity || 7000;
+      const totalEquity = botState.equity;
+      if (!totalEquity || totalEquity <= 0) {
+        throw new Error('BotState equity not initialized for grid trading');
+      }
       const gridAllocation = totalEquity * 0.20;
 
       return gridAllocation;

@@ -116,8 +116,18 @@ export class MLGuardrails {
       console.log(`  - Sharpe Ratio: ${metrics.mlSharpeRatio.toFixed(2)}`);
       console.log(`  - Max Drawdown: ${(metrics.mlMaxDrawdown * 100).toFixed(1)}%`);
       
-      // TODO: Send email/SMS alert
-      // TODO: Post to Slack/Discord
+      // Send critical alert
+      const alertService = (await import('../alertService')).default;
+      await alertService.critical(
+        'ML Guardrails Triggered - Rollback Initiated',
+        `ML performance degraded below acceptable thresholds. System rolled back to non-ML mode.`,
+        {
+          sharpeRatio: metrics.mlSharpeRatio,
+          maxDrawdown: metrics.mlMaxDrawdown,
+          winRate: metrics.mlWinRate,
+          profitFactor: metrics.mlProfitFactor
+        }
+      );
       
       console.log('[MLGuardrails] ✅ Rollback complete. ML disabled.');
       
