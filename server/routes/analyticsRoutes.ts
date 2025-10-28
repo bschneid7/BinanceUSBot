@@ -7,11 +7,11 @@ const router = express.Router();
 
 // Description: Get performance metrics for analytics dashboard
 // Endpoint: GET /api/analytics/performance
-// Request: {}
+// Request: { startDate?: string, endDate?: string }
 // Response: { metrics: PerformanceMetrics }
 router.get('/performance', requireUser(), cacheMiddleware({
   ttl: 60, // Cache for 1 minute
-  keyGenerator: (req) => `analytics:performance:${req.user._id}`,
+  keyGenerator: (req) => `analytics:performance:${req.user._id}:${req.query.startDate || 'all'}:${req.query.endDate || 'now'}`,
 }), async (req: Request, res: Response) => {
   try {
     console.log(`[AnalyticsRoutes] GET /performance - User: ${req.user?._id}`);
@@ -21,7 +21,13 @@ router.get('/performance', requireUser(), cacheMiddleware({
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    const metrics = await analyticsService.getPerformanceStats(req.user._id);
+    // Parse date range parameters
+    const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+    const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+    
+    console.log(`[AnalyticsRoutes] Date range: ${startDate?.toISOString() || 'inception'} to ${endDate?.toISOString() || 'now'}`);
+
+    const metrics = await analyticsService.getPerformanceStats(req.user._id, startDate, endDate);
 
     console.log(`[AnalyticsRoutes] Performance metrics retrieved successfully`);
     res.status(200).json({ metrics });

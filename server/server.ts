@@ -24,7 +24,9 @@ import controlRoutes from './routes/controlRoutes';
 import positionControlRoutes from './routes/positionControlRoutes';
 import transactionRoutes from './routes/transactions';
 import botActivityRoutes from './routes/botActivityRoutes';
+import snapshotRoutes from './routes/snapshotRoutes';
 import { connectDB } from './config/database';
+// import { initializeSnapshotCron } from './utils/snapshotCron';
 import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
 import logger from './utils/logger';
@@ -103,6 +105,8 @@ app.use('/api/ppo', ppoRoutes);
 app.use('/api/ml', mlRoutes);
 // ML Metrics Routes
 app.use('/api/ml-metrics', mlMetricsRoutes);
+// Admin routes
+app.use('/api/admin/snapshot', snapshotRoutes);
 // Manual Trade Routes (NEW - Phase 1)
 app.use('/api/trade', manualTradeRoutes);
 // Risk Routes
@@ -141,5 +145,8 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
+  
+  // Initialize daily snapshot cron job
+  // initializeSnapshotCron(); // TODO: Install node-cron first
 });
 
