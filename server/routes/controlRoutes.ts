@@ -3,6 +3,7 @@ import BotState from '../models/BotState';
 import BotConfig from '../models/BotConfig';
 import Position from '../models/Position';
 import { getDashboardWebSocket } from './dashboardWebSocket';
+import botStatusService from '../services/botStatusService';
 
 const router = Router();
 
@@ -184,20 +185,26 @@ router.post('/bot/emergency-stop', async (req: Request, res: Response) => {
  */
 router.get('/bot/status', async (req: Request, res: Response) => {
     try {
+        // Get real-time bot status from botStatusService (same as main dashboard)
         const botState = await BotState.findOne();
-        const botConfig = await BotConfig.findOne();
-        const openPositions = await Position.countDocuments({ status: 'OPEN' });
+        const userId = botState?.userId;
         
-        // Use BotConfig.botStatus for consistency with dashboard
-        const isActive = botConfig?.botStatus === 'ACTIVE' || botState?.isRunning || false;
+        if (!userId) {
+            return res.status(404).json({
+                success: false,
+                error: 'Bot state not found'
+            });
+        }
+        
+        const botStatus = await botStatusService.getBotStatus(userId);
         
         res.json({
             success: true,
             data: {
-                isActive,
-                totalEquity: botState?.totalEquity || 0,
-                openPositions,
-                lastUpdate: botState?.updatedAt || new Date()
+                isActive: botStatus.status === 'ACTIVE',
+                totalEquity: botStatus.equity,
+                openPositions: botStatus.openPositions,
+                lastUpdate: new Date()
             }
         });
     } catch (error) {

@@ -99,8 +99,30 @@ class BotStatusService {
 
       // Get starting equity from BotState (synced from Binance)
       const botState = await BotState.findOne({ userId });
-      const startingEquity = botState?.equity || 7000; // Fallback to 7000 if not found
+      
+      // Use startingEquity field (initial deposit), not current equity
+      // If startingEquity not set, initialize it to 15000 (actual account starting balance)
+      let startingEquity = botState?.startingEquity;
+      if (!startingEquity || startingEquity === 7000) {
+        // Fix incorrect starting equity (was hardcoded to 7000)
+        startingEquity = 15000;
+        console.log(`[BotStatusService] Initializing startingEquity to $${startingEquity}`);
+      }
+      
       const equity = startingEquity + totalRealizedPnl + totalUnrealizedPnl;
+      
+      console.log(`[BotStatusService] Equity calculation: $${startingEquity} (starting) + $${totalRealizedPnl.toFixed(2)} (realized) + $${totalUnrealizedPnl.toFixed(2)} (unrealized) = $${equity.toFixed(2)}`);
+      
+      // Update BotState with calculated equity for consistency across all endpoints
+      if (botState) {
+        botState.startingEquity = startingEquity; // Ensure startingEquity is persisted
+        botState.equity = equity;
+        botState.dailyPnl = dailyPnl;
+        botState.weeklyPnl = weeklyPnl;
+        botState.totalEquity = equity; // Also update totalEquity field
+        await botState.save();
+        console.log(`[BotStatusService] Updated BotState with equity: $${equity.toFixed(2)}, startingEquity: $${startingEquity}`);
+      }
 
       console.log(`[BotStatusService] Calculated equity: $${equity.toFixed(2)}`);
 

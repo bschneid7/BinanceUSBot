@@ -33,19 +33,21 @@ export const getActivePositions = async (): Promise<{ positions: Position[] }> =
 };
 
 // Description: Get trade history with filters
-// Endpoint: GET /api/trades/history
-// Request: { startDate?: string, endDate?: string, playbook?: string, outcome?: string, symbol?: string }
-// Response: { trades: Trade[] }
+// Endpoint: GET /api/dashboard/trades
+// Request: { startDate?: string, endDate?: string, playbook?: string, outcome?: string, symbol?: string, limit?: number }
+// Response: { success: boolean, data: Trade[] }
 export const getTradeHistory = async (filters?: {
   startDate?: string;
   endDate?: string;
   playbook?: string;
   outcome?: string;
   symbol?: string;
+  limit?: number;
 }): Promise<{ trades: Trade[] }> => {
   try {
-    const response = await api.get('/trades/history', { params: filters });
-    return response.data;
+    const response = await api.get('/dashboard/trades', { params: filters });
+    // Backend returns { success: true, data: [...] }, normalize to { trades: [...] }
+    return { trades: response.data.data || [] };
   } catch (error: unknown) {
     logger.error('API request failed', error);
     const err = error as { response?: { data?: { error?: string } }; message?: string };
