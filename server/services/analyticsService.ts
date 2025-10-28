@@ -1,29 +1,21 @@
 import { Types } from 'mongoose';
+import Trade from '../models/Trade';
+import Position from '../models/Position';
 import BotState from '../models/BotState';
 import EquitySnapshot from '../models/EquitySnapshot';
-import Position from '../models/Position';
-import Trade from '../models/Trade';
 import snapshotService from './snapshotService';
+import depositService from './depositService';
 
-/**
- * Analytics Service
- * Provides time-range aware performance analytics
- */
-
-export class AnalyticsService {
-
+class AnalyticsService {
   /**
    * Get performance statistics for a date range
-   * @param userId - User ID
-   * @param startDate - Start date (defaults to inception)
-   * @param endDate - End date (defaults to now)
    */
   async getPerformanceStats(
     userId: Types.ObjectId,
     startDate?: Date,
     endDate?: Date
   ): Promise<{
-    startingEquity: number;
+    startingCapital: number;
     currentEquity: number;
     totalPnl: number;
     totalPnlPct: number;
@@ -48,9 +40,10 @@ export class AnalyticsService {
 
       console.log(`[Analytics] Getting performance for ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-      // Get starting equity for the period
-      const startingEquity = await snapshotService.getEquityAtDate(userId, startDate);
-      console.log(`[Analytics] Starting equity: $${startingEquity.toFixed(2)}`);
+      // Get starting capital (all deposits up to and including start date)
+      // For all-time P&L, this is total deposits
+      const startingCapital = await depositService.getNetDeposits(userId);
+      console.log(`[Analytics] Starting capital (net deposits): $${startingCapital.toFixed(2)}`);
 
       // Get realized P&L for the period (closed trades)
       const trades = await Trade.find({
@@ -69,7 +62,15 @@ export class AnalyticsService {
         // For current date, calculate real-time equity
         const openPositions = await Position.find({ userId, status: 'OPEN' });
         unrealizedPnl = openPositions.reduce((sum, pos) => sum + (pos.unrealized_pnl || 0), 0);
-        currentEquity = startingEquity + realizedPnl + unrealizedPnl;
+        
+        // Get all-time realized P&L
+        const allTrades = await Trade.find({ userId });
+        const allTimeRealizedPnl = allTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
+        
+        // Get current net deposits
+        const currentNetDeposits = await depositService.getNetDeposits(userId);
+        
+        currentEquity = currentNetDeposits + allTimeRealizedPnl + unrealizedPnl;
         console.log(`[Analytics] Current equity (real-time): $${currentEquity.toFixed(2)}`);
       } else {
         // For historical date, use snapshot
@@ -77,9 +78,11 @@ export class AnalyticsService {
         console.log(`[Analytics] Current equity (snapshot): $${currentEquity.toFixed(2)}`);
       }
 
-      // Calculate total P&L
-      const totalPnl = currentEquity - startingEquity;
-      const totalPnlPct = startingEquity > 0 ? (totalPnl / startingEquity) * 100 : 0;
+      // Calculate total P&L (only trading gains/losses, not deposits)
+      const totalPnl = currentEquity - startingCapital;
+      const totalPnlPct = startingCapital > 0 ? (totalPnl / startingCapital) * 100 : 0;
+
+      console.log(`[Analytics] Total P&L: $${totalPnl.toFixed(2)} (${totalPnlPct.toFixed(2)}%)`);
 
       // Get daily and weekly P&L from BotState (for current period only)
       const state = await BotState.findOne({ userId });
@@ -91,10 +94,10 @@ export class AnalyticsService {
 
       // Calculate Sharpe ratio from snapshots in the period
       const snapshots = await snapshotService.getSnapshotsInRange(userId, startDate, endDate);
-      const { sharpeRatio, maxDrawdown, maxDrawdownPct } = this.calculateRiskMetrics(snapshots, startingEquity);
+      const { sharpeRatio, maxDrawdown, maxDrawdownPct } = this.calculateRiskMetrics(snapshots, startingCapital);
 
       return {
-        startingEquity,
+        startingCapital,
         currentEquity,
         totalPnl,
         totalPnlPct,
@@ -114,143 +117,57 @@ export class AnalyticsService {
     }
   }
 
-  /**
-   * Calculate risk metrics from snapshots
-   */
-  private calculateRiskMetrics(snapshots: any[], startingEquity: number) {
+  private isToday(date: Date): boolean {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  }
+
+  private calculateRiskMetrics(
+    snapshots: any[],
+    startingCapital: number
+  ): { sharpeRatio: number; maxDrawdown: number; maxDrawdownPct: number } {
     if (snapshots.length < 2) {
       return { sharpeRatio: 0, maxDrawdown: 0, maxDrawdownPct: 0 };
     }
 
     // Calculate daily returns
-    const dailyReturns = [];
+    const returns: number[] = [];
     for (let i = 1; i < snapshots.length; i++) {
-      const returnPct = ((snapshots[i].equity - snapshots[i - 1].equity) / snapshots[i - 1].equity) * 100;
-      dailyReturns.push(returnPct);
+      const prevEquity = snapshots[i - 1].equity;
+      const currEquity = snapshots[i].equity;
+      const dailyReturn = (currEquity - prevEquity) / prevEquity;
+      returns.push(dailyReturn);
     }
 
-    // Sharpe ratio
-    const avgReturn = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
-    const stdDev = Math.sqrt(
-      dailyReturns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (dailyReturns.length - 1)
-    );
+    // Calculate Sharpe ratio (assuming risk-free rate = 0)
+    const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
     const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(252) : 0; // Annualized
 
-    // Max drawdown
-    let maxEquity = startingEquity;
+    // Calculate max drawdown
+    let peak = snapshots[0].equity;
     let maxDrawdown = 0;
+    let maxDrawdownPct = 0;
+
     for (const snapshot of snapshots) {
-      if (snapshot.equity > maxEquity) {
-        maxEquity = snapshot.equity;
+      if (snapshot.equity > peak) {
+        peak = snapshot.equity;
       }
-      const drawdown = maxEquity - snapshot.equity;
+      const drawdown = peak - snapshot.equity;
+      const drawdownPct = (drawdown / peak) * 100;
+      
       if (drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
+        maxDrawdownPct = drawdownPct;
       }
     }
-    const maxDrawdownPct = maxEquity > 0 ? (maxDrawdown / maxEquity) * 100 : 0;
 
-    return { sharpeRatio, maxDrawdown, maxDrawdownPct };
-  }
-
-  /**
-   * Check if a date is today
-   */
-  private isToday(date: Date): boolean {
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
-  }
-
-  /**
-   * Get equity curve data for charting
-   */
-  async getEquityCurve(userId: Types.ObjectId, days: number = 30): Promise<Array<{ date: string; equity: number }>> {
-    try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-
-      const snapshots = await snapshotService.getSnapshotsInRange(userId, startDate, endDate);
-
-      return snapshots.map(snapshot => ({
-        date: snapshot.date.toISOString(),
-        equity: snapshot.equity,
-      }));
-    } catch (error) {
-      console.error('[Analytics] Error getting equity curve:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create daily equity snapshot
-   * Should be run at end of each trading day
-   */
-  async createDailySnapshot(userId: Types.ObjectId): Promise<void> {
-    try {
-      await snapshotService.createSnapshot(userId);
-    } catch (error) {
-      console.error('[Analytics] Error creating daily snapshot:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get monthly performance summary
-   */
-  async getMonthlyPerformance(userId: Types.ObjectId, year: number): Promise<Array<{
-    month: number;
-    monthName: string;
-    startEquity: number;
-    endEquity: number;
-    pnl: number;
-    pnlPct: number;
-    trades: number;
-    winRate: number;
-  }>> {
-    try {
-      const results = [];
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-      for (let month = 0; month < 12; month++) {
-        const startDate = new Date(year, month, 1);
-        const endDate = new Date(year, month + 1, 0, 23, 59, 59);
-
-        const snapshots = await snapshotService.getSnapshotsInRange(userId, startDate, endDate);
-        if (snapshots.length === 0) continue;
-
-        const startEquity = snapshots[0].equity;
-        const endEquity = snapshots[snapshots.length - 1].equity;
-        const pnl = endEquity - startEquity;
-        const pnlPct = (pnl / startEquity) * 100;
-
-        const trades = await Trade.find({
-          userId,
-          date: { $gte: startDate, $lte: endDate },
-        });
-
-        const wins = trades.filter(t => t.pnl_usd > 0);
-        const winRate = trades.length > 0 ? wins.length / trades.length : 0;
-
-        results.push({
-          month,
-          monthName: monthNames[month],
-          startEquity,
-          endEquity,
-          pnl,
-          pnlPct,
-          trades: trades.length,
-          winRate,
-        });
-      }
-
-      return results;
-    } catch (error) {
-      console.error('[Analytics] Error getting monthly performance:', error);
-      throw error;
-    }
+    return {
+      sharpeRatio: Math.round(sharpeRatio * 100) / 100,
+      maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+      maxDrawdownPct: Math.round(maxDrawdownPct * 100) / 100,
+    };
   }
 }
 
