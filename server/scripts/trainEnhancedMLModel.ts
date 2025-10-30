@@ -1,25 +1,18 @@
-#!/usr/bin/env ts-node
-
-/**
- * Train Enhanced ML Model Script
- * Trains a PPO agent with CDD features on historical data
- */
-
-import dotenv from 'dotenv';
-import { connectDB } from '../config/database';
+import * as tf from '@tensorflow/tfjs-node';
+import { connectDB } from '../config/db';
 import User from '../models/User';
-import mlModelService from '../services/mlModelService';
-import { EnhancedPPOTrainingEnvironment } from '../services/tradingEngine/ppoTrainingEnv_enhanced';
+import { MLModel, IMLModel } from '../models/MLModel';
+import EnhancedPPOTrainingEnvironment from '../services/tradingEngine/ppoTrainingEnv_enhanced';
 import PPOAgent from '../services/tradingEngine/PPOAgent';
-import { Types } from 'mongoose';
-import logger from '../utils/logger';
+import { getLogger } from '../utils/logger';
+import { MLModelService } from '../services/mlModelService';
 
-dotenv.config();
+const logger = getLogger('TrainEnhanced');
 
 interface TrainingConfig {
   episodes: number;
-  stateDim: number; // 17 with CDD features
-  actionDim: number; // 4 actions: HOLD, BUY, SELL, CLOSE
+  stateDim: number;
+  actionDim: number;
   learningRate: number;
   gamma: number;
   epsilon: number;
@@ -30,81 +23,46 @@ interface TrainingConfig {
 }
 
 /**
- * Train enhanced ML model with CDD features
+ * Train an enhanced PPO model
  */
-async function trainEnhancedModel(
-  userId: Types.ObjectId,
-  config: TrainingConfig
-): Promise<void> {
-  logger.info('[TrainEnhanced] Starting enhanced model training...');
-  logger.info('[TrainEnhanced] Config:', config);
-
+async function trainEnhancedModel(userId: string, config: TrainingConfig): Promise<void> {
   try {
-    // Generate version string
-    const version = `v${Date.now()}-enhanced-e${config.episodes}`;
-
-    // Create model record
-    const modelRecord = await mlModelService.createModel(userId, {
-      modelType: 'PPO-Enhanced',
-      version,
-      episodes: config.episodes,
-      avgReward: 0,
-      episodeRewards: [],
-      config: {
-        stateDim: config.stateDim,
-        actionDim: config.actionDim,
-        learningRate: config.learningRate,
-        gamma: config.gamma,
-        epsilon: config.epsilon,
-        symbol: config.symbol,
-        cddFeatures: [
-          'fundingRate',
-          'fundingRateTrend',
-          'vwapDeviation',
-          'orderFlowImbalance',
-          'correlationScore',
-        ],
-      },
-      notes: 'Enhanced training with CDD features started',
-    });
-
-    logger.info(`[TrainEnhanced] Created model record: ${modelRecord._id}`);
-
-    // Create enhanced training environment
-    const env = new EnhancedPPOTrainingEnvironment();
+    const mlModelService = new MLModelService();
+    const version = `ppo-enhanced-v${Date.now()}`;
     
-    // Load historical data with CDD features
-    logger.info(`[TrainEnhanced] Loading historical data for ${config.symbol}...`);
-    await env.loadHistoricalData(
-      config.symbol,
-      config.startDate,
-      config.endDate,
-      config.interval
-    );
-
-    // Create PPO agent
-    const agent = new PPOAgent(config.stateDim, config.actionDim, {
-      learningRate: config.learningRate,
-      gamma: config.gamma,
-      epsilon: config.epsilon,
+    // Create a new ML model record
+    const modelRecord = await mlModelService.createModel({
+      userId,
+      name: `Enhanced PPO - ${config.symbol}`,
+      version,
+      symbol: config.symbol,
+      status: 'training',
+      algorithm: 'PPO',
+      stateDim: config.stateDim,
+      actionDim: config.actionDim,
+      hyperparameters: config,
     });
 
-    // Training loop
+    logger.info(`[TrainEnhanced] Starting training for model: ${modelRecord._id}`);
+    
+    // Initialize environment and agent
+    const env = new EnhancedPPOTrainingEnvironment(config.symbol, config.startDate, config.endDate, config.interval);
+    await env.init();
+    
+    const agent = new PPOAgent(config.stateDim, config.actionDim, config.learningRate, config.gamma, config.epsilon);
+    await agent.init();
+
     const episodeRewards: number[] = [];
     const startTime = Date.now();
-    
-    logger.info(`[TrainEnhanced] Starting training for ${config.episodes} episodes...`);
-    
+
     for (let episode = 0; episode < config.episodes; episode++) {
       let state = env.reset();
-      let episodeReward = 0;
       let done = false;
+      let episodeReward = 0;
       let steps = 0;
-      
-      const stateArray = convertStateToArray(state);
-      
-      while (!done) {
-        // Get action from agent
+
+      while (!done && steps < 2000) { // Max steps per episode
+        const stateArray = convertStateToArray(state);
         const action = await agent.act(stateArray);
         
         // Take step in environment
@@ -136,7 +94,6 @@ async function trainEnhancedModel(
         );
       }
     }
-
     const trainingDuration = Date.now() - startTime;
     const avgReward = episodeRewards.reduce((a, b) => a + b, 0) / episodeRewards.length;
 
@@ -191,6 +148,13 @@ function convertStateToArray(state: any): number[] {
     state.vwapDeviation,
     state.orderFlowImbalance,
     state.correlationScore,
+    state.btcDominance,
+    state.ethDominance,
+    state.marketCap,
+    state.fearAndGreed,
+    state.fearAndGreed90d,
+    state.hourOfDay,
+    state.dayOfWeek,
     state.hasPosition,
     state.positionSide,
     state.positionPnL,
@@ -206,35 +170,32 @@ function convertStateToArray(state: any): number[] {
 async function main() {
   try {
     logger.info('[TrainEnhanced] ===== Enhanced ML Model Training Script =====');
-
     // Connect to database
     await connectDB();
-
+    
     // Get user
     const userEmail = process.argv[2] || 'bschneid7@gmail.com';
     const user = await User.findOne({ email: userEmail });
-
     if (!user) {
       logger.error(`[TrainEnhanced] User not found: ${userEmail}`);
       process.exit(1);
     }
-
     logger.info(`[TrainEnhanced] Training model for user: ${user.email}`);
-
+    
     // Parse command line arguments
     const episodes = parseInt(process.argv[3]) || 1000;
     const symbol = process.argv[4] || 'BTCUSDT';
     const daysBack = parseInt(process.argv[5]) || 90;
-
+    
     // Calculate date range
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysBack);
-
+    
     // Training configuration
     const config: TrainingConfig = {
       episodes,
-      stateDim: 17, // Enhanced with 5 CDD features
+      stateDim: 31, // Using all available features from the enhanced environment
       actionDim: 4, // HOLD, BUY, SELL, CLOSE
       learningRate: 0.0003,
       gamma: 0.99,
@@ -244,13 +205,13 @@ async function main() {
       endDate,
       interval: '1h',
     };
-
+    
     logger.info(`[TrainEnhanced] Training on ${daysBack} days of ${symbol} data`);
     logger.info(`[TrainEnhanced] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
-
+    
     // Train the model
     await trainEnhancedModel(user._id, config);
-
+    
     logger.info('[TrainEnhanced] ===== Training Complete =====');
     process.exit(0);
   } catch (error) {
@@ -260,9 +221,7 @@ async function main() {
 }
 
 // Execute if run directly
-if (require.main === module) {
-  main();
-}
+main();
 
 export { trainEnhancedModel };
-
+// Updated at Wed Oct 29 10:24:59 EDT 2025

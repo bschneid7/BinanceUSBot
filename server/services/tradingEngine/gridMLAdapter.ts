@@ -4,7 +4,7 @@ import GridPerformanceLog from '../../models/GridPerformanceLog';
 import GridOrder from '../../models/GridOrder';
 import BotState from '../../models/BotState';
 import BotConfig from '../../models/BotConfig';
-import PPOAgent from './PPOAgent';
+import GridPPOAgent from './GridPPOAgent';
 import binanceService from '../binanceService';
 
 /**
@@ -42,7 +42,7 @@ interface MLDecision {
 }
 
 class GridMLAdapter {
-  private ppoAgent: PPOAgent | null = null;
+  private ppoAgent: GridPPOAgent | null = null;
   private userId: Types.ObjectId | null = null;
   private lastDecisionTime: Map<string, number> = new Map();
   private readonly DECISION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -57,13 +57,13 @@ class GridMLAdapter {
       // Create PPO agent with extended state/action dimensions for grid trading
       // State: 20 dimensions (market + grid + portfolio features)
       // Actions: 5 dimensions (spacing, sizing, enable, active, confidence)
-      this.ppoAgent = new PPOAgent(20, 5, {
+      this.ppoAgent = new GridPPOAgent(20, 5, {
         learningRate: 0.0003,
         gamma: 0.99,
         epsilon: 0.2,
       });
 
-      logger.info('[GridMLAdapter] Initialized with PPO agent');
+      logger.info('[GridMLAdapter] Initialized with GridPPOAgent');
     } catch (error) {
       logger.error('[GridMLAdapter] Error initializing:', error);
       throw error;
@@ -319,17 +319,8 @@ class GridMLAdapter {
       // Prepare state vector
       const stateVector = this.prepareStateVector(marketIndicators, gridMetrics, portfolioContext);
 
-      // Get ML action from PPO agent
-      const actionIndex = await this.ppoAgent.getAction(stateVector);
-      // Convert single action index to action vector for grid trading
-      // For grid trading, we need continuous values, so we'll use a simplified approach
-      const action = [
-        (actionIndex % 100) / 100, // spacing multiplier (0-1)
-        ((actionIndex / 100) % 100) / 100, // size multiplier (0-1)
-        actionIndex > 500 ? 1 : 0, // pair enabled
-        actionIndex > 250 ? 1 : 0, // grid active
-        0.5, // confidence (default)
-      ];
+      // Get ML action from GridPPOAgent (returns continuous action vector [0,1]^5)
+      const action = await this.ppoAgent.getAction(stateVector);
 
       // Interpret action vector
       // action[0]: spacing multiplier (0-1 → 0.5-1.5)
