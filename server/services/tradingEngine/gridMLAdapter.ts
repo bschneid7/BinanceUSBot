@@ -63,7 +63,10 @@ class GridMLAdapter {
         epsilon: 0.2,
       });
 
-      logger.info('[GridMLAdapter] Initialized with GridPPOAgent');
+      // Load trained model
+      const modelPath = '/opt/binance-bot/ml_models/grid_ppo_best';
+      await this.ppoAgent.loadModel(modelPath);
+      logger.info('[GridMLAdapter] Initialized with GridPPOAgent and loaded trained model');
     } catch (error) {
       logger.error('[GridMLAdapter] Error initializing:', error);
       throw error;
