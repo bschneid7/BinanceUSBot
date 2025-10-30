@@ -64,7 +64,7 @@ class GridMLAdapter {
       });
 
       // Load trained model
-      const modelPath = '/opt/binance-bot/ml_models/grid_ppo_best';
+      const modelPath = '/app/ml_models/grid_ppo_best';
       await this.ppoAgent.loadModel(modelPath);
       logger.info('[GridMLAdapter] Initialized with GridPPOAgent and loaded trained model');
     } catch (error) {
