@@ -3,6 +3,7 @@ import binanceService from '../binanceService';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import GridOrder from '../../models/GridOrder';
+import Transaction from '../../models/Transaction';
 import gridMLAdapter from './gridMLAdapter';
 
 /**
@@ -463,6 +464,9 @@ export class MultiPairGridTradingService {
           // Update database
           await this.updateGridOrderStatus(level.orderId, 'FILLED');
 
+          // Record transaction for tax reporting
+          await this.recordTransaction(symbol, level, orderStatus);
+
           // Place opposite order
           await this.placeOppositeOrder(symbol, level);
         }
@@ -643,6 +647,51 @@ export class MultiPairGridTradingService {
       });
     } catch (error) {
       logger.error({ err: error, symbol, orderId }, '[GridTrading] Error saving grid order');
+    }
+  }
+
+  /**
+   * Record transaction for tax reporting
+   */
+  private async recordTransaction(symbol: string, level: GridLevel, orderStatus: any): Promise<void> {
+    try {
+      // Get user ID from bot state
+      const botState = await BotState.findOne();
+      if (!botState || !botState.userId) {
+        logger.error('[GridTrading] Cannot record transaction: No user ID found');
+        return;
+      }
+
+      // Extract order details
+      const executedQty = parseFloat(orderStatus.executedQty || 0);
+      const avgPrice = parseFloat(orderStatus.avgPrice || level.price);
+      const commission = parseFloat(orderStatus.commission || 0);
+      const total = executedQty * avgPrice;
+
+      // Create transaction record
+      await Transaction.create({
+        userId: botState.userId,
+        symbol,
+        side: level.side,
+        quantity: executedQty,
+        price: avgPrice,
+        total,
+        fees: commission,
+        type: 'GRID',
+        orderId: level.orderId,
+        timestamp: new Date(orderStatus.updateTime || Date.now())
+      });
+
+      logger.info({ 
+        symbol, 
+        side: level.side, 
+        quantity: executedQty, 
+        price: avgPrice,
+        orderId: level.orderId 
+      }, '[GridTrading] Transaction recorded');
+
+    } catch (error) {
+      logger.error({ err: error, symbol, orderId: level.orderId }, '[GridTrading] Error recording transaction');
     }
   }
 

@@ -1,6 +1,12 @@
 import * as tf from '@tensorflow/tfjs-node';
 import axios from 'axios';
 
+interface Candle {
+  close: number;
+  high: number;
+  low: number;
+  volume: number;
+}
 console.log('[CPU] TensorFlow backend:', tf.getBackend());
 console.log('[CPU] Starting 1000-episode PPO training...\n');
 
@@ -111,7 +117,7 @@ class PPO {
   }
 }
 
-async function fetchData(symbol: string, days: number) {
+async function fetchData(symbol: string, days: number): Promise<Candle[]>(symbol: string, days: number) {
   const url = `https://api.binance.us/api/v3/klines?symbol=${symbol}&interval=1h&limit=${days * 24}`;
   const res = await axios.get(url);
   return res.data.map((k: any) => ({
@@ -166,7 +172,7 @@ async function main() {
   console.log('[CPU] Fetching BTC data...');
   const candles = await fetchData('BTCUSDT', 90);
   console.log(`[CPU] Loaded ${candles.length} candles`);
-  console.log(`[CPU] Price range: $${Math.min(...candles.map(c => c.close)).toFixed(0)} - $${Math.max(...candles.map(c => c.close)).toFixed(0)}\n`);
+  console.log(`[CPU] Price range: $${Math.min(...candles.map((c: Candle) => c.close)).toFixed(0)} - $${Math.max(...candles.map((c: Candle) => c.close)).toFixed(0)}\n`);
   
   const trainSize = Math.floor(candles.length * 0.7);
   const valSize = Math.floor(candles.length * 0.15);
