@@ -31,4 +31,13 @@ router.use('/alerts', alertRoutes);
 router.use('/ml-metrics', mlMetricsRoutes);
 router.use('/manual-trade', manualTradeRoutes);
 
+
+// Health check route
+router.get('/',(req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    service: 'BinanceUSBot API'
+  });
+});
 export default router;

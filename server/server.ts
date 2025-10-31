@@ -137,9 +137,6 @@ const clientDistPath = process.env.CLIENT_DIST_PATH ||
 console.log('Serving static files from:', clientDistPath);
 app.use(express.static(clientDistPath));
 // Handle React routing, return all requests to React app
-app.get('*', (req: Request, res: Response) => {
-  res.sendFile(path.join(clientDistPath, 'index.html'));
-});
 // Error handling
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(`Unhandled application error: ${err.message}`);
@@ -149,6 +146,11 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
   
+
+// Handle React routing - MUST be last (after all API routes)
+app.get('*', (req: Request, res: Response) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
   // Initialize daily snapshot cron job
   initializeSnapshotCron();
   
