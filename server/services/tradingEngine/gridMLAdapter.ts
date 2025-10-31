@@ -78,29 +78,39 @@ class GridMLAdapter {
    */
   private async calculateMarketIndicators(symbol: string): Promise<MarketIndicators> {
     try {
-      // Get recent klines for calculations
+      // Try to get klines first
       const klines = await binanceService.getKlines(symbol, '1h', 100);
       
       if (!klines || klines.length === 0) {
-        throw new Error('No kline data available');
+        console.warn(`[GridMLAdapter] No kline data for ${symbol}, using fallback indicators`);
+        // Return neutral/default indicators when klines unavailable
+        return {
+          price: 0,  // Will be filled from current market price
+          volume24h: 0,
+          volatility: 0.02,  // Assume 2% volatility
+          trendStrength: 0,  // Neutral
+          rsi: 50,  // Neutral
+          bollingerBandWidth: 0.04,  // Assume 4% BB width
+          priceVsMA20: 0,  // Neutral
+        };
       }
-
+      
       const closes = klines.map(k => parseFloat(k[4]));
       const highs = klines.map(k => parseFloat(k[2]));
       const lows = klines.map(k => parseFloat(k[3]));
       const volumes = klines.map(k => parseFloat(k[5]));
       
       const currentPrice = closes[closes.length - 1];
-
+      
       // Calculate volatility (ATR-like)
       const ranges = highs.map((h, i) => h - lows[i]);
       const volatility = ranges.slice(-24).reduce((a, b) => a + b, 0) / 24 / currentPrice;
-
+      
       // Calculate trend strength (price momentum)
       const ma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
       const priceVsMA20 = (currentPrice - ma20) / ma20;
       const trendStrength = Math.max(-1, Math.min(1, priceVsMA20 * 10)); // Normalize to -1 to 1
-
+      
       // Calculate RSI
       const gains = [];
       const losses = [];
@@ -109,20 +119,21 @@ class GridMLAdapter {
         gains.push(change > 0 ? change : 0);
         losses.push(change < 0 ? -change : 0);
       }
+      
       const avgGain = gains.slice(-14).reduce((a, b) => a + b, 0) / 14;
       const avgLoss = losses.slice(-14).reduce((a, b) => a + b, 0) / 14;
       const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
       const rsi = 100 - (100 / (1 + rs));
-
+      
       // Calculate Bollinger Band Width
       const stdDev = Math.sqrt(
         closes.slice(-20).reduce((sum, price) => sum + Math.pow(price - ma20, 2), 0) / 20
       );
       const bollingerBandWidth = (4 * stdDev) / ma20; // (upper - lower) / ma20
-
+      
       // 24h volume
       const volume24h = volumes.slice(-24).reduce((a, b) => a + b, 0);
-
+      
       return {
         price: currentPrice,
         volume24h,
@@ -133,8 +144,17 @@ class GridMLAdapter {
         priceVsMA20,
       };
     } catch (error) {
-      logger.error(`[GridMLAdapter] Error calculating market indicators for ${symbol}:`, error);
-      throw error;
+      console.error(`[GridMLAdapter] Error calculating market indicators for ${symbol}:`, error);
+      // Return safe defaults on error
+      return {
+        price: 0,
+        volume24h: 0,
+        volatility: 0.02,
+        trendStrength: 0,
+        rsi: 50,
+        bollingerBandWidth: 0.04,
+        priceVsMA20: 0,
+      };
     }
   }
 
@@ -226,15 +246,15 @@ class GridMLAdapter {
       Math.min(gridMetrics.avgProfitPerCycle / 10, 1.0), // Max $10 per cycle
       gridMetrics.fillRate, // Already 0-1
       gridMetrics.capitalUtilization, // Already 0-1
+      gridMetrics.buyOrders / Math.max(gridMetrics.buyOrders + gridMetrics.sellOrders, 1), // Grid balance
 
       // Portfolio context (5 features)
       portfolioContext.playbookActivityLevel, // 0-1
       Math.min(portfolioContext.totalExposure / 10000, 1.0), // Normalize exposure
       portfolioContext.reserveCashPct / 100, // 0-100 → 0-1
       
-      // Time features (2)
+      // Time features (1)
       (new Date().getHours()) / 24, // Hour of day
-      (new Date().getDay()) / 7, // Day of week
     ];
   }
 
@@ -381,7 +401,8 @@ class GridMLAdapter {
 
       return decision;
     } catch (error) {
-      logger.error(`[GridMLAdapter] Error getting ML decision for ${symbol}:`, error);
+      logger.error(`[GridMLAdapter] Error getting ML decision for ${symbol}:`, error instanceof Error ? error.message : error, error instanceof Error ? error.stack : undefined);
+      console.error(`[GridMLAdapter DEBUG] Full error for ${symbol}:`, error);
       return null;
     }
   }

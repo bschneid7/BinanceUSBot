@@ -1,0 +1,20 @@
+{
+  "training_date": "2025-10-25T16:51:47.738832",
+  "config": {
+    "symbol": "BTCUSDT",
+    "episodes": 100,
+    "lookback_period": 20,
+    "max_steps": 500,
+    "initial_equity": 10000,
+    "fee_rate": 0.00075,
+    "learning_rate": 0.0003,
+    "gamma": 0.99,
+    "epsilon": 0.2,
+    "batch_size": 64,
+    "state_dim": 17,
+    "action_dim": 4
+  },
+  "status": "Training completed but model save failed due to Keras filename requirement",
+  "fix_applied": "Updated to use .weights.h5 extension",
+  "next_steps": "Re-run training with fixed script to save model"
+}

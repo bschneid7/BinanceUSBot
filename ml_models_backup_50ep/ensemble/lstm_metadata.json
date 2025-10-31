@@ -1,0 +1,15 @@
+{
+  "symbol": "BTCUSDT",
+  "days": 90,
+  "sequence_length": 20,
+  "train_samples": 120,
+  "val_samples": 30,
+  "n_features": 11,
+  "metrics": {
+    "val_accuracy": 0.4333333373069763,
+    "direction_accuracy": 0.5333333333333333,
+    "val_loss": 1.0723053216934204,
+    "epochs_trained": 24
+  },
+  "timestamp": "2025-10-25T19:22:02.575983"
+}

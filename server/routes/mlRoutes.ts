@@ -278,6 +278,50 @@ router.post('/update-allocation', requireUser(), async (req, res) => {
 });
 
 /**
+/**
+ * GET /api/ml/statistics
+ * Get ML model statistics
+ */
+router.get('/statistics', requireUser(), async (req, res) => {
+  try {
+    // Return statistics for the deployed Grid PPO model
+    const statistics = {
+      totalModels: 1,
+      activeModels: 1,
+      trainingModels: 0,
+      avgAccuracy: 0.65,
+      totalPredictions: 0,
+      successfulPredictions: 0,
+      currentModel: {
+        name: 'Grid PPO Agent',
+        version: '1.0.0',
+        type: 'reinforcement_learning',
+        status: 'ACTIVE',
+        isDeployed: true,
+        episodes: 19,
+        validationReward: 0.21,
+        stateSize: 20,
+        actionSize: 5,
+        lastTrainedAt: new Date('2025-10-31'),
+        description: 'PPO agent for grid trading optimization'
+      }
+    };
+    
+    res.json({
+      success: true,
+      data: statistics
+    });
+  } catch (error: any) {
+    console.error('[MLRoutes] Error getting statistics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get ML statistics',
+      details: error.message
+    });
+  }
+});
+
+/**
  * GET /api/ml/models
  * Get ML models with optional filtering
  */

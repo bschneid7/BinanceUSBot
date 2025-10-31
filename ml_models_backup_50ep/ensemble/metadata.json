@@ -1,0 +1,49 @@
+{
+  "symbol": "BTCUSDT",
+  "days": 90,
+  "train_samples": 132,
+  "val_samples": 33,
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "rsi",
+    "macd",
+    "macd_signal",
+    "macd_hist",
+    "bb_upper",
+    "bb_lower",
+    "bb_width",
+    "bb_position",
+    "sma_5",
+    "sma_10",
+    "sma_20",
+    "ema_5",
+    "ema_10",
+    "momentum_1h",
+    "momentum_4h",
+    "momentum_24h",
+    "volume_sma_20",
+    "volume_ratio",
+    "atr",
+    "atr_pct",
+    "funding_rate",
+    "funding_trend",
+    "vwap",
+    "vwap_deviation"
+  ],
+  "rf_metrics": {
+    "val_accuracy": 0.42424242424242425,
+    "cv_mean": 0.3105413105413105,
+    "cv_std": 0.04386909351802028
+  },
+  "xgb_metrics": {
+    "val_mae": 0.0019648568654445204,
+    "val_rmse": 0.0029266205787216054,
+    "direction_accuracy": 0.5151515151515151,
+    "best_iteration": 10
+  },
+  "timestamp": "2025-10-25T19:19:44.857591"
+}

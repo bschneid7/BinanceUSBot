@@ -169,6 +169,35 @@ class AnalyticsService {
       maxDrawdownPct: Math.round(maxDrawdownPct * 100) / 100,
     };
   }
+
+  /**
+   * Get equity curve data for charting
+   */
+  async getEquityCurve(
+    userId: Types.ObjectId,
+    days: number = 30
+  ): Promise<{ timestamp: Date; equity: number }[]> {
+    try {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      
+      const snapshots = await EquitySnapshot.find({
+        userId,
+        timestamp: { $gte: startDate }
+      })
+      .sort({ timestamp: 1 })
+      .lean();
+      
+      return snapshots.map(s => ({
+        timestamp: s.timestamp,
+        equity: s.equity
+      }));
+    } catch (error) {
+      console.error('[Analytics] Error getting equity curve:', error);
+      return [];
+    }
+  }
+
 }
 
 export default new AnalyticsService();

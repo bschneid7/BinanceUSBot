@@ -1,0 +1,13 @@
+{
+  "symbol": "BTCUSDT",
+  "days": 90,
+  "samples": 150,
+  "meta_features": 16,
+  "stacking_metrics": {
+    "train_accuracy": 0.4866666666666667
+  },
+  "voting_metrics": {
+    "voting_accuracy": 0.48
+  },
+  "timestamp": "2025-10-25T19:37:30.708292"
+}
