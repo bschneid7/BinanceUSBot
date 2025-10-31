@@ -129,7 +129,80 @@ class AlertService {
   async critical(title: string, message: string, data?: Record<string, any>): Promise<void> {
     await this.sendAlert({ severity: 'critical', title, message, data });
   }
+
+  /**
+   * Get recent alerts for a user
+   */
+  async getRecentAlerts(userId: string, limit: number = 20): Promise<any[]> {
+    try {
+      // TODO: Implement database query to fetch alerts
+      // For now, return empty array
+      console.log(`[AlertService] getRecentAlerts called for user ${userId}, limit ${limit}`);
+      return [];
+    } catch (error) {
+      console.error("[AlertService] Error fetching recent alerts:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get alerts by level
+   */
+  async getAlertsByLevel(userId: string, level: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL', limit: number = 20): Promise<any[]> {
+    try {
+      console.log(`[AlertService] getAlertsByLevel called for user ${userId}, level ${level}, limit ${limit}`);
+      return [];
+    } catch (error) {
+      console.error("[AlertService] Error fetching alerts by level:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get alerts by type
+   */
+  async getAlertsByType(userId: string, type: string, limit: number = 20): Promise<any[]> {
+    try {
+      console.log(`[AlertService] getAlertsByType called for user ${userId}, type ${type}, limit ${limit}`);
+      return [];
+    } catch (error) {
+      console.error("[AlertService] Error fetching alerts by type:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get alert statistics
+   */
+  async getAlertStats(userId: string): Promise<any> {
+    try {
+      console.log(`[AlertService] getAlertStats called for user ${userId}`);
+      return {
+        total: 0,
+        info: 0,
+        warning: 0,
+        error: 0,
+        critical: 0
+      };
+    } catch (error) {
+      console.error("[AlertService] Error fetching alert stats:", error);
+      return { total: 0, info: 0, warning: 0, error: 0, critical: 0 };
+    }
+  }
+
+  /**
+   * Create a new alert
+   */
+  async createAlert(data: any): Promise<any> {
+    try {
+      console.log(`[AlertService] createAlert called:`, data);
+      // TODO: Save to database
+      return { _id: Date.now().toString(), ...data, createdAt: new Date() };
+    } catch (error) {
+      console.error("[AlertService] Error creating alert:", error);
+      throw error;
+    }
+  }
 }
 
 export default new AlertService();
-
