@@ -127,7 +127,7 @@ export class SignalGenerator {
 
   /**
    * Playbook A: Breakout Trend
-   * Entry: Price breaks PDH or 20-session high with volume confirmation
+   * Entry: Price breaks PDH or 12-session high with volume confirmation
    */
   private async checkPlaybookA(
     userId: Types.ObjectId,
@@ -145,14 +145,14 @@ export class SignalGenerator {
       const klines15m = await binanceService.getKlines(symbol, '15m', 50);
       if (klines15m.length < 20) return null;
 
-      // Calculate 20-session high (using 1h data)
-      const high20 = Math.max(...klines1h.slice(-20).map(k => parseFloat(k.high)));
+      // Calculate 12-session high (using 1h data)
+      const high12 = Math.max(...klines1h.slice(-12).map(k => parseFloat(k.high)));
 
       // Calculate prior day high (PDH) - last 24 1h bars
       const pdh = Math.max(...klines1h.slice(-24).map(k => parseFloat(k.high)));
 
       // Check if current price is breaking out
-      const breakoutLevel = Math.max(high20, pdh);
+      const breakoutLevel = Math.max(high12, pdh);
       const isBreakout = price >= breakoutLevel;
 
       if (!isBreakout) {
@@ -183,7 +183,7 @@ export class SignalGenerator {
         action: 'BUY',
         entryPrice: price,
         stopPrice,
-        reason: `Breakout above ${breakoutLevel === pdh ? 'PDH' : '20-session high'} at $${breakoutLevel.toFixed(2)} with ${volumeMultiple.toFixed(2)}x volume`,
+        reason: `Breakout above ${breakoutLevel === pdh ? 'PDH' : '12-session high'} at $${breakoutLevel.toFixed(2)} with ${volumeMultiple.toFixed(2)}x volume`,
       };
     } catch (error) {
       console.error(`[PlaybookA] Error checking ${market.symbol}:`, error);
@@ -289,7 +289,7 @@ export class SignalGenerator {
 
   /**
    * Playbook C: Event Burst
-   * Entry: Impulse move >= 4% in < 10 minutes with retest confirmation
+   * Entry: Impulse move >= 2.5% in < 10 minutes with retest confirmation
    */
   private async checkPlaybookC(
     userId: Types.ObjectId,
@@ -315,9 +315,9 @@ export class SignalGenerator {
       const largestMove = Math.max(moveUp, moveDown);
       const direction = moveUp > moveDown ? 'BUY' : 'SELL';
 
-      // Check if impulse >= 4%
-      if (largestMove < 4.0) {
-        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 4.0%`);
+      // Check if impulse >= 2.5%
+      if (largestMove < 2.5) {
+        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 2.5%`);
         return null;
       }
 
@@ -367,7 +367,7 @@ export class SignalGenerator {
 
   /**
    * Playbook D: Dip Pullback (Laddered)
-   * Entry: Flash crash >= 2σ with breadth confirmation
+   * Entry: Flash crash >= 1.5σ with breadth confirmation
    */
   private async checkPlaybookD(
     userId: Types.ObjectId,
@@ -399,9 +399,9 @@ export class SignalGenerator {
       const lastReturn = returns[returns.length - 1];
       const sigmaMove = (lastReturn - mean) / stdDev;
 
-      // Trigger: return <= -2σ (flash crash)
-      if (sigmaMove > -2.0) {
-        console.log(`[PlaybookD] ${symbol} - No flash crash: ${sigmaMove.toFixed(2)}σ > -2.0σ`);
+      // Trigger: return <= -1.5σ (flash crash)
+      if (sigmaMove > -1.5) {
+        console.log(`[PlaybookD] ${symbol} - No flash crash: ${sigmaMove.toFixed(2)}σ > -1.5σ`);
         return null;
       }
 
