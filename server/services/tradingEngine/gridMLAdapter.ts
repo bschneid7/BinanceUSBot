@@ -46,6 +46,8 @@ class GridMLAdapter {
   private userId: Types.ObjectId | null = null;
   private lastDecisionTime: Map<string, number> = new Map();
   private readonly DECISION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  private klineCache: Map<string, { data: MarketIndicators; timestamp: number }> = new Map();
+  private readonly KLINE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
 
   /**
    * Initialize ML adapter with PPO agent
@@ -78,6 +80,13 @@ class GridMLAdapter {
    */
   private async calculateMarketIndicators(symbol: string): Promise<MarketIndicators> {
     try {
+      // Check cache first to avoid rate limits
+      const cached = this.klineCache.get(symbol);
+      if (cached && Date.now() - cached.timestamp < this.KLINE_CACHE_TTL_MS) {
+        console.log(`[GridMLAdapter] Using cached kline data for ${symbol}`);
+        return cached.data;
+      }
+
       // Try to get klines first
       const klines = await binanceService.getKlines(symbol, '1h', 100);
       
@@ -134,7 +143,7 @@ class GridMLAdapter {
       // 24h volume
       const volume24h = volumes.slice(-24).reduce((a, b) => a + b, 0);
       
-      return {
+      const indicators = {
         price: currentPrice,
         volume24h,
         volatility,
@@ -143,6 +152,12 @@ class GridMLAdapter {
         bollingerBandWidth,
         priceVsMA20,
       };
+
+      // Cache the result
+      this.klineCache.set(symbol, { data: indicators, timestamp: Date.now() });
+      console.log(`[GridMLAdapter] Cached kline data for ${symbol}`);
+      
+      return indicators;
     } catch (error) {
       console.error(`[GridMLAdapter] Error calculating market indicators for ${symbol}:`, error);
       // Return safe defaults on error

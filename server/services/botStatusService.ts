@@ -3,6 +3,8 @@ import Position from '../models/Position';
 import Trade from '../models/Trade';
 import BotState from '../models/BotState';
 import BotConfig from '../models/BotConfig';
+import GridOrder from '../models/GridOrder';
+import binanceService from './binanceService';
 import depositService from './depositService';
 
 interface BotStatusMetrics {
@@ -138,9 +140,38 @@ class BotStatusService {
         return sum + Math.abs(pos.position_size_usd || 0);
       }, 0);
 
-      const availableCapital = equity - positionsValue;
+      // Get grid orders to calculate locked capital
+      // Fetch actual open orders from Binance to get quantities
+      let gridOrdersValue = 0;
+      let gridOrdersCount = 0;
+      try {
+        const openOrders = await binanceService.getOpenOrders();
+        gridOrdersCount = openOrders.length;
+        gridOrdersValue = openOrders.reduce((sum: number, order: any) => {
+          // For limit orders, capital is locked = origQty * price
+          const qty = parseFloat(order.origQty || 0);
+          const price = parseFloat(order.price || 0);
+          return sum + Math.abs(qty * price);
+        }, 0);
+      } catch (error) {
+        console.error('[BotStatusService] Error fetching open orders from Binance:', error);
+        // Fallback: use GridOrder count as estimate
+        const gridOrders = await GridOrder.find({ status: 'OPEN' });
+        gridOrdersCount = gridOrders.length;
+        gridOrdersValue = 0; // Can't calculate without quantities
+      }
+
+      console.log(`[BotStatusService] Grid orders: ${gridOrdersCount}, locked capital: $${gridOrdersValue.toFixed(2)}`);
+
+      // True available capital = equity - positions - grid orders
+      const lockedCapital = positionsValue + gridOrdersValue;
+      const availableCapital = equity - lockedCapital;
       const reserveLevel = (availableCapital / equity) * 100;
-      const totalExposurePct = (positionsValue / equity) * 100;
+      const totalExposurePct = (lockedCapital / equity) * 100;
+
+      const reserveTargetPct = (config?.reserve?.target_pct || 0.15) * 100;
+      console.log(`[BotStatusService] Capital breakdown: Equity=$${equity.toFixed(2)}, Positions=$${positionsValue.toFixed(2)}, GridOrders=$${gridOrdersValue.toFixed(2)}, Available=$${availableCapital.toFixed(2)} (${reserveLevel.toFixed(1)}%)`);
+      console.log(`[BotStatusService] Reserve: Current=${reserveLevel.toFixed(1)}%, Target=${reserveTargetPct.toFixed(1)}%`);
 
       console.log(`[BotStatusService] Calculated equity: $${equity.toFixed(2)}`);
 
