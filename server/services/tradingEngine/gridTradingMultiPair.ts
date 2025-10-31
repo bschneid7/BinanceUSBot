@@ -4,6 +4,7 @@ import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import GridOrder from '../../models/GridOrder';
 import Transaction from '../../models/Transaction';
+import Position from '../../models/Position';
 import gridMLAdapter from './gridMLAdapter';
 
 /**

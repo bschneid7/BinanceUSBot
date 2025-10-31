@@ -18,6 +18,7 @@ import userDataStream from './userDataStream';
 import webSocketService from '../webSocketService';
 import gridTradingService from './gridTrading';
 import multiPairGridTradingService from './gridTradingMultiPair';
+import { portfolioRebalancer } from './portfolioRebalancer';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -110,14 +111,23 @@ export class TradingEngine {
         logger.warn('[TradingEngine] Continuing with REST API polling');
       }
 
-      // Start Multi-Pair Grid Trading service
+      // Start Multi-Pair Grid Trading service (non-blocking)
       logger.info('[TradingEngine] Starting Multi-Pair Grid Trading service...');
-      try {
-        await multiPairGridTradingService.start();
+      multiPairGridTradingService.start().then(() => {
         logger.info('[TradingEngine] Multi-Pair Grid Trading service started successfully');
-      } catch (error) {
+      }).catch((error) => {
         logger.error('[TradingEngine] Failed to start Multi-Pair Grid Trading service:', error);
         logger.warn('[TradingEngine] Continuing without Multi-Pair Grid Trading');
+      });
+
+      // Start Portfolio Rebalancer
+      logger.info('[TradingEngine] Starting Portfolio Rebalancer...');
+      try {
+        await portfolioRebalancer.start();
+        logger.info('[TradingEngine] Portfolio Rebalancer started successfully');
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to start Portfolio Rebalancer:', error);
+        logger.warn('[TradingEngine] Continuing without Portfolio Rebalancer');
       }
 
       // Start self-scheduling scan loop (prevents overlaps)
