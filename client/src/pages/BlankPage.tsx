@@ -23,7 +23,7 @@ export function BlankPage() {
         <CardContent>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Please tell Pythagora to implement the {location.pathname} page
+              This page has not been implemented yet: {location.pathname} page
             </p>
             <Button 
               onClick={() => navigate("/")} 
