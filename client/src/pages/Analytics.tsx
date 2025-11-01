@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 
 // Type for the actual backend response
 interface BackendMetrics {
-  startingEquity: number;
+  startingCapital: number;
   currentEquity: number;
   totalPnl: number;
   totalPnlPct: number;
@@ -158,7 +158,7 @@ export function Analytics() {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(metrics.currentEquity)}</div>
             <p className="text-xs text-muted-foreground">
-              Starting: {formatCurrency(metrics.startingEquity)}
+              Starting: {formatCurrency(metrics.startingCapital)}
             </p>
           </CardContent>
         </Card>
