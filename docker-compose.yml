@@ -45,6 +45,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-}
       EMAIL_TO: ${EMAIL_TO:-}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      ML_ENHANCED_SIGNALS: ${ML_ENHANCED_SIGNALS:-false}
     ports:
       - "${APP_PORT:-3000}:3000"
     depends_on:

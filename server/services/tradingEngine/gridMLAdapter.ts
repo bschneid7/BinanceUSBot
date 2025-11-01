@@ -91,17 +91,26 @@ class GridMLAdapter {
       const klines = await binanceService.getKlines(symbol, '1h', 100);
       
       if (!klines || klines.length === 0) {
-        console.warn(`[GridMLAdapter] No kline data for ${symbol}, using fallback indicators`);
-        // Return neutral/default indicators when klines unavailable
-        return {
-          price: 0,  // Will be filled from current market price
-          volume24h: 0,
-          volatility: 0.02,  // Assume 2% volatility
-          trendStrength: 0,  // Neutral
-          rsi: 50,  // Neutral
-          bollingerBandWidth: 0.04,  // Assume 4% BB width
-          priceVsMA20: 0,  // Neutral
-        };
+        console.warn(`[GridMLAdapter] No kline data for ${symbol}, fetching current price`);
+        // Get current market price as fallback
+        try {
+          const ticker = await binanceService.getPrice(symbol);
+          const currentPrice = parseFloat(ticker.price);
+          console.log(`[GridMLAdapter] Using current price ${currentPrice} for ${symbol}`);
+          // Return neutral/default indicators with actual price
+          return {
+            price: currentPrice,
+            volume24h: 0,
+            volatility: 0.02,  // Assume 2% volatility
+            trendStrength: 0,  // Neutral
+            rsi: 50,  // Neutral
+            bollingerBandWidth: 0.04,  // Assume 4% BB width
+            priceVsMA20: 0,  // Neutral
+          };
+        } catch (priceError) {
+          console.error(`[GridMLAdapter] Failed to get current price for ${symbol}:`, priceError);
+          return null;  // Return null instead of invalid data
+        }
       }
       
       const closes = klines.map(k => parseFloat(k[4]));
@@ -160,16 +169,8 @@ class GridMLAdapter {
       return indicators;
     } catch (error) {
       console.error(`[GridMLAdapter] Error calculating market indicators for ${symbol}:`, error);
-      // Return safe defaults on error
-      return {
-        price: 0,
-        volume24h: 0,
-        volatility: 0.02,
-        trendStrength: 0,
-        rsi: 50,
-        bollingerBandWidth: 0.04,
-        priceVsMA20: 0,
-      };
+      // Return null on error to skip this cycle rather than use invalid data
+      return null;
     }
   }
 
@@ -331,6 +332,10 @@ class GridMLAdapter {
 
       // Calculate market indicators and grid metrics
       const marketIndicators = await this.calculateMarketIndicators(symbol);
+      if (!marketIndicators || !marketIndicators.price || marketIndicators.price === 0) {
+        logger.warn(`[GridMLAdapter] Invalid market indicators for ${symbol}, skipping ML decision`);
+        return null;
+      }
       const gridMetrics = await this.calculateGridMetrics(symbol);
 
       // Get portfolio context
@@ -382,25 +387,44 @@ class GridMLAdapter {
         orderSize: pairConfig?.orderSize || 100,
       });
 
-      // Log performance for training data
-      await GridPerformanceLog.create({
-        userId: this.userId,
-        symbol,
-        timestamp: new Date(),
-        gridConfig: {
-          lowerBound: pairConfig?.lowerBound || 0,
-          upperBound: pairConfig?.upperBound || 0,
-          gridLevels: pairConfig?.gridLevels || 0,
-          orderSize: pairConfig?.orderSize || 0,
-          gridSpacing: pairConfig ? (pairConfig.upperBound - pairConfig.lowerBound) / pairConfig.gridLevels : 0,
-        },
-        marketState: marketIndicators,
-        performance: gridMetrics,
-        stateVector,
-        mlAction: decision,
-        reward,
-        portfolioContext,
-      });
+      // Validate data before logging
+      const isValidNumber = (val: any) => typeof val === 'number' && !isNaN(val) && isFinite(val);
+      const allValid = isValidNumber(marketIndicators.price) &&
+                       isValidNumber(marketIndicators.volume24h) &&
+                       isValidNumber(marketIndicators.volatility) &&
+                       isValidNumber(marketIndicators.trendStrength) &&
+                       isValidNumber(marketIndicators.rsi) &&
+                       isValidNumber(marketIndicators.bollingerBandWidth) &&
+                       isValidNumber(marketIndicators.priceVsMA20) &&
+                       isValidNumber(reward);
+      
+      if (allValid) {
+        // Log performance for training data
+        try {
+          await GridPerformanceLog.create({
+            userId: this.userId,
+            symbol,
+            timestamp: new Date(),
+            gridConfig: {
+              lowerBound: pairConfig?.lowerBound || 0,
+              upperBound: pairConfig?.upperBound || 0,
+              gridLevels: pairConfig?.gridLevels || 0,
+              orderSize: pairConfig?.orderSize || 0,
+              gridSpacing: pairConfig ? (pairConfig.upperBound - pairConfig.lowerBound) / pairConfig.gridLevels : 0,
+            },
+            marketState: marketIndicators,
+            performance: gridMetrics,
+            stateVector,
+            mlAction: decision,
+            reward,
+            portfolioContext,
+          });
+        } catch (dbError) {
+          logger.warn(`[GridMLAdapter] Failed to log performance for ${symbol}:`, dbError instanceof Error ? dbError.message : dbError);
+        }
+      } else {
+        logger.warn(`[GridMLAdapter] Skipping performance log for ${symbol} due to invalid data`);
+      }
 
       // Update last decision time
       this.lastDecisionTime.set(symbol, now);
