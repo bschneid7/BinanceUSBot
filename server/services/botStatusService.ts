@@ -95,23 +95,23 @@ class BotStatusService {
       const allClosedTrades = await Trade.find({ userId });
       const totalRealizedPnl = allClosedTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
 
-      // Calculate current equity
-      // equity = deposits - withdrawals + realized_pnl + unrealized_pnl
-      const equity = startingCapital + totalRealizedPnl + totalUnrealizedPnl;
+      // Get current equity from BotState (set by TradingEngine from Binance API)
+      let botState = await BotState.findOne({ userId });
+      const equity = botState?.equity || startingCapital + totalRealizedPnl + totalUnrealizedPnl;
       
       // Calculate total P&L
       const totalPnl = totalRealizedPnl + totalUnrealizedPnl;
       const totalPnlPct = startingCapital > 0 ? (totalPnl / startingCapital) * 100 : 0;
       
-      console.log(`[BotStatusService] Equity calculation: $${startingCapital.toFixed(2)} (deposits) + $${totalRealizedPnl.toFixed(2)} (realized) + $${totalUnrealizedPnl.toFixed(2)} (unrealized) = $${equity.toFixed(2)}`);
+      console.log(`[BotStatusService] Equity from BotState (Binance API): $${equity.toFixed(2)}`);
       console.log(`[BotStatusService] Total P&L: $${totalPnl.toFixed(2)} (${totalPnlPct.toFixed(2)}%)`);
       
-      // Update BotState with calculated values
-      let botState = await BotState.findOne({ userId });
+      
+      // Update BotState with calculated values (but do NOT overwrite equity)
       if (!botState) {
         botState = await BotState.create({
           userId,
-          status: 'ACTIVE',
+          status: "ACTIVE",
           startingEquity: startingCapital,
           equity,
           currentR,
@@ -123,8 +123,9 @@ class BotStatusService {
           weeklyPnlR,
         });
       } else {
+        // Do NOT overwrite equity - it is set by TradingEngine from Binance API
         botState.startingEquity = startingCapital;
-        botState.equity = equity;
+        // botState.equity = equity;  // REMOVED - TradingEngine sets this from Binance
         botState.currentR = currentR;
         botState.dailyPnl = dailyPnl;
         botState.dailyPnlR = dailyPnlR;
@@ -133,7 +134,7 @@ class BotStatusService {
         await botState.save();
       }
       
-      console.log(`[BotStatusService] Updated BotState with equity: $${equity.toFixed(2)}, startingCapital: $${startingCapital.toFixed(2)}`);
+      console.log(`[BotStatusService] Updated BotState (equity NOT overwritten, read from TradingEngine): $${equity.toFixed(2)}, startingCapital: $${startingCapital.toFixed(2)}`);
 
       // Calculate available capital and reserve level
       const positionsValue = openPositions.reduce((sum, pos) => {

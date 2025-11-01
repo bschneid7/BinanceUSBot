@@ -59,20 +59,17 @@ class AnalyticsService {
       
       const isToday = this.isToday(endDate);
       if (isToday) {
-        // For current date, calculate real-time equity
+        // For current date, get real-time equity from BotState
+        // (BotState.equity is already calculated from Binance balances by TradingEngine)
+        const state = await BotState.findOne({ userId });
+        currentEquity = state?.equity || 0;
+        
+        // Calculate unrealized P&L from open positions
         const openPositions = await Position.find({ userId, status: 'OPEN' });
         unrealizedPnl = openPositions.reduce((sum, pos) => sum + (pos.unrealized_pnl || 0), 0);
         
-        // Get all-time realized P&L
-        const allTrades = await Trade.find({ userId });
-        const allTimeRealizedPnl = allTrades.reduce((sum, trade) => sum + (trade.pnl_usd || 0), 0);
-        
-        // Get current net deposits
-        const currentNetDeposits = await depositService.getNetDeposits(userId);
-        
-        currentEquity = currentNetDeposits + allTimeRealizedPnl + unrealizedPnl;
-        console.log(`[Analytics] Current equity (real-time): $${currentEquity.toFixed(2)}`);
-      } else {
+        console.log(`[Analytics] Current equity (from BotState): $${currentEquity.toFixed(2)}`);
+      } else{
         // For historical date, use snapshot
         currentEquity = await snapshotService.getEquityAtDate(userId, endDate);
         console.log(`[Analytics] Current equity (snapshot): $${currentEquity.toFixed(2)}`);
