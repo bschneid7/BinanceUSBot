@@ -32,6 +32,7 @@ import { initializeSnapshotCron } from './utils/snapshotCron';
 import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
 import logger from './utils/logger';
+import positionMgmtRunner from "./runPositionManagement";
 // Load environment variables
 dotenv.config();
 if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
@@ -153,6 +154,9 @@ app.get('*', (req: Request, res: Response) => {
 });
   // Initialize daily snapshot cron job
   initializeSnapshotCron();
+  // Initialize position management (every 5 minutes)
+  positionMgmtRunner.startScheduled();
+
   
   // Initialize daily P&L report cron job
   // initializeDailyReportCron(); // Disabled until dependencies are installed

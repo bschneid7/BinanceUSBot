@@ -93,6 +93,11 @@ interface CachedBalance {
   timestamp: number;
 }
 
+interface CachedKline {
+  data: BinanceKlineData[];
+  timestamp: number;
+}
+
 class BinanceService {
   private apiKey: string;
   private apiSecret: string;
@@ -109,6 +114,10 @@ class BinanceService {
   // Balance caching with TTL
   private balanceCache: Map<string, CachedBalance> = new Map();
   private readonly BALANCE_CACHE_TTL = 10000; // 10 seconds
+  
+  // Kline caching with TTL (aggressive caching to reduce API weight)
+  private klineCache: Map<string, CachedKline> = new Map();
+  private readonly KLINE_CACHE_TTL = 300000; // 5 minutes (300 seconds)
   
   // Retry configuration
   private readonly MAX_RETRIES = 5;
@@ -377,12 +386,23 @@ class BinanceService {
     interval: string,
     limit: number = 100
   ): Promise<BinanceKlineData[]> {
+    // Check cache first to reduce API weight
+    const cacheKey = `${symbol}_${interval}_${limit}`;
+    const now = Date.now();
+    const cached = this.klineCache.get(cacheKey);
+    
+    if (cached && (now - cached.timestamp) < this.KLINE_CACHE_TTL) {
+      // Cache hit - return cached klines
+      return cached.data;
+    }
+    
+    // Cache miss - fetch from API
     return await this.retryWithBackoff(async () => {
       try {
         const response = await this.client.get('/api/v3/klines', {
           params: { symbol, interval, limit },
         });
-        return response.data.map((kline: unknown[]) => ({
+        const klines = response.data.map((kline: unknown[]) => ({
           openTime: kline[0],
           open: kline[1],
           high: kline[2],
@@ -391,6 +411,11 @@ class BinanceService {
           volume: kline[5],
           closeTime: kline[6],
         }));
+        
+        // Update cache
+        this.klineCache.set(cacheKey, { data: klines, timestamp: now });
+        
+        return klines;
       } catch (error) {
         if (axios.isAxiosError(error)) {
           const status = error.response?.status;
@@ -400,6 +425,13 @@ class BinanceService {
             error.response?.data || error.message
           );
         }
+        
+        // On error, try to return stale cache if available
+        if (cached) {
+          console.warn(`[BinanceService] Returning stale kline cache for ${symbol} (${Math.floor((now - cached.timestamp) / 1000)}s old)`);
+          return cached.data;
+        }
+        
         throw error;
       }
     }, `getKlines(${symbol}, ${interval})`);
