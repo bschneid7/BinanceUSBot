@@ -19,6 +19,8 @@ import mlRoutes from './routes/mlRoutes';
 import mlMetricsRoutes from './routes/mlMetricsRoutes';
 import manualTradeRoutes from './routes/manualTradeRoutes';
 import capitalAllocationRoutes from './routes/capitalAllocationRoutes';
+import orderReconciliationRoutes from './routes/orderReconciliationRoutes';
+import strategyDriftRoutes from './routes/strategyDriftRoutes';
 import riskRoutes from './routes/riskRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import controlRoutes from './routes/controlRoutes';
@@ -34,6 +36,8 @@ import cors from 'cors';
 import { register as metricsRegister, recordHttpRequest } from './utils/metrics';
 import logger from './utils/logger';
 import positionMgmtRunner from "./runPositionManagement";
+import orderReconciliationService from './services/orderReconciliationService';
+import strategyDriftDetector from './services/strategyDriftDetector';
 // Load environment variables
 dotenv.config();
 if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
@@ -117,6 +121,8 @@ app.use('/api/trade', manualTradeRoutes);
 // Risk Routes
 app.use('/api/risk', riskRoutes);
 app.use('/api', capitalAllocationRoutes);
+app.use('/api/reconciliation', orderReconciliationRoutes);
+app.use('/api/drift', strategyDriftRoutes);
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {
   try {
@@ -160,6 +166,12 @@ app.listen(port, () => {
   initializeSnapshotCron();
   // Initialize position management (every 5 minutes)
   positionMgmtRunner.startScheduled();
+  
+  // Initialize order reconciliation (every 5 minutes)
+  orderReconciliationService.startAutoReconciliation();
+  
+  // Initialize strategy drift detection (every 24 hours)
+  strategyDriftDetector.startAutoDriftDetection(24);
 
   
   // Initialize daily P&L report cron job

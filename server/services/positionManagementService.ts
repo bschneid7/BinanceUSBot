@@ -3,9 +3,14 @@
  * 
  * Manages open positions with:
  * - Trailing stops (move to breakeven at +1R, trail at +2R)
- * - Profit targets (close 50% at +2R, 50% at +3R)
+ * - Multiple profit targets (33% at +1R, 50% remaining at +2R, rest at +3R)
  * - Time-based exits (close if >7 days and <+0.5R)
  * - Stop loss management
+ * 
+ * Enhanced with partial profit-taking at multiple levels:
+ * - 1R: Take 33% profit (lock in gains early)
+ * - 2R: Take 50% of remaining (50% of original 67% = 33.5%)
+ * - 3R: Close remaining position (33.5%)
  */
 
 import Position from '../models/Position';
@@ -17,8 +22,11 @@ const logger = console;
 interface PositionManagementConfig {
   trailingStopEnabled: boolean;
   trailingStopDistance: number; // Percentage (e.g., 2 = 2%)
-  profitTarget1: number; // First profit target in R (e.g., 2 = 2R)
-  profitTarget2: number; // Second profit target in R (e.g., 3 = 3R)
+  profitTarget1: number; // First profit target in R (e.g., 1 = 1R)
+  profitTarget1Percent: number; // Percentage to close at PT1 (e.g., 0.33 = 33%)
+  profitTarget2: number; // Second profit target in R (e.g., 2 = 2R)
+  profitTarget2Percent: number; // Percentage of remaining to close at PT2 (e.g., 0.5 = 50%)
+  profitTarget3: number; // Third profit target in R (e.g., 3 = 3R)
   maxHoldingDays: number; // Maximum days to hold a position
   minProfitForTimeExit: number; // Minimum profit % to avoid time-based exit
 }
@@ -26,8 +34,11 @@ interface PositionManagementConfig {
 const DEFAULT_CONFIG: PositionManagementConfig = {
   trailingStopEnabled: true,
   trailingStopDistance: 2, // Trail 2% below peak
-  profitTarget1: 2, // Close 50% at +2R
-  profitTarget2: 3, // Close remaining at +3R
+  profitTarget1: 1, // Close 33% at +1R
+  profitTarget1Percent: 0.33, // Take 33% profit at 1R
+  profitTarget2: 2, // Close 50% of remaining at +2R
+  profitTarget2Percent: 0.5, // Take 50% of remaining at 2R
+  profitTarget3: 3, // Close rest at +3R
   maxHoldingDays: 7,
   minProfitForTimeExit: 0.5, // 0.5% minimum profit
 };
@@ -106,16 +117,22 @@ class PositionManagementService {
       return;
     }
 
-    // Check profit targets
-    if (currentR >= this.config.profitTarget2) {
-      logger.info(`[PositionMgmt] ${symbol}: Profit target 2 hit (${currentR.toFixed(2)}R)`);
-      await this.closePosition(position, currentPrice, 'PROFIT_TARGET_2');
+    // Check profit targets (in reverse order - highest first)
+    if (currentR >= this.config.profitTarget3) {
+      logger.info(`[PositionMgmt] ${symbol}: Profit target 3 hit (${currentR.toFixed(2)}R), closing remaining position`);
+      await this.closePosition(position, currentPrice, 'PROFIT_TARGET_3');
+      return;
+    }
+
+    if (currentR >= this.config.profitTarget2 && !position.partial_close_2) {
+      logger.info(`[PositionMgmt] ${symbol}: Profit target 2 hit (${currentR.toFixed(2)}R), closing ${(this.config.profitTarget2Percent * 100).toFixed(0)}% of remaining`);
+      await this.partialClose(position, currentPrice, this.config.profitTarget2Percent, 'PROFIT_TARGET_2', 2);
       return;
     }
 
     if (currentR >= this.config.profitTarget1 && !position.partial_close_1) {
-      logger.info(`[PositionMgmt] ${symbol}: Profit target 1 hit (${currentR.toFixed(2)}R), closing 50%`);
-      await this.partialClose(position, currentPrice, 0.5, 'PROFIT_TARGET_1');
+      logger.info(`[PositionMgmt] ${symbol}: Profit target 1 hit (${currentR.toFixed(2)}R), closing ${(this.config.profitTarget1Percent * 100).toFixed(0)}%`);
+      await this.partialClose(position, currentPrice, this.config.profitTarget1Percent, 'PROFIT_TARGET_1', 1);
       return;
     }
 
@@ -185,8 +202,13 @@ class PositionManagementService {
 
   /**
    * Partially close a position
+   * @param position Position to partially close
+   * @param currentPrice Current market price
+   * @param percentage Percentage of CURRENT position to close (not original)
+   * @param reason Exit reason
+   * @param targetNumber Which profit target (1, 2, or 3)
    */
-  private async partialClose(position: any, currentPrice: number, percentage: number, reason: string): Promise<void> {
+  private async partialClose(position: any, currentPrice: number, percentage: number, reason: string, targetNumber: number = 1): Promise<void> {
     try {
       const symbol = position.symbol;
       const quantityToClose = Math.abs(position.position_size) * percentage;
@@ -207,10 +229,20 @@ class PositionManagementService {
       position.position_size *= (1 - percentage);
       position.position_size_usd *= (1 - percentage);
       position.realized_pnl = (position.realized_pnl || 0) + partialPnl;
-      position.partial_close_1 = true;
-      position.partial_close_price = currentPrice;
-      position.partial_close_time = new Date();
-      position.partial_close_reason = reason;
+      
+      // Track which partial close this is
+      if (targetNumber === 1) {
+        position.partial_close_1 = true;
+        position.partial_close_1_price = currentPrice;
+        position.partial_close_1_time = new Date();
+        position.partial_close_1_reason = reason;
+      } else if (targetNumber === 2) {
+        position.partial_close_2 = true;
+        position.partial_close_2_price = currentPrice;
+        position.partial_close_2_time = new Date();
+        position.partial_close_2_reason = reason;
+      }
+      
       await position.save();
 
       logger.info(`[PositionMgmt] ${symbol} partial close successful. Realized P&L: $${partialPnl.toFixed(2)}`);
