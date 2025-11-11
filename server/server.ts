@@ -18,6 +18,7 @@ import ppoRoutes from './routes/ppoRoutes';
 import mlRoutes from './routes/mlRoutes';
 import mlMetricsRoutes from './routes/mlMetricsRoutes';
 import manualTradeRoutes from './routes/manualTradeRoutes';
+import capitalAllocationRoutes from './routes/capitalAllocationRoutes';
 import riskRoutes from './routes/riskRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import controlRoutes from './routes/controlRoutes';
@@ -115,6 +116,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/trade', manualTradeRoutes);
 // Risk Routes
 app.use('/api/risk', riskRoutes);
+app.use('/api', capitalAllocationRoutes);
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {
   try {

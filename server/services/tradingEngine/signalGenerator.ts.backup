@@ -5,7 +5,6 @@ import Signal from '../../models/Signal';
 import { MarketData } from './marketScanner';
 import binanceService from '../binanceService';
 import getCDDHelper from '../cddDataHelper';
-import { SIGNAL_TIERS } from '../../config/signalTierConfig';
 
 export interface TradingSignal {
   symbol: string;
@@ -17,8 +16,6 @@ export interface TradingSignal {
   quantity?: number;
   reason: string;
   isEvent?: boolean;
-  tier?: string; // Signal tier (TIER_1_CONSERVATIVE, TIER_2_MODERATE, TIER_3_AGGRESSIVE)
-  confidence?: number; // ML confidence score
 }
 
 export class SignalGenerator {
@@ -169,10 +166,8 @@ export class SignalGenerator {
       const currentVolume = parseFloat(klines15m[klines15m.length - 1].volume);
       const volumeMultiple = currentVolume / avgVolume;
 
-      // Use Tier 2 (moderate) volume threshold: 1.5x instead of 1.8x
-      const tier2VolumeThreshold = SIGNAL_TIERS.TIER_2_MODERATE.playbook_multipliers.volume_mult;
-      if (volumeMultiple < tier2VolumeThreshold) {
-        console.log(`[PlaybookA] ${symbol} - Volume ${volumeMultiple.toFixed(2)}x < ${tier2VolumeThreshold}x required (Tier 2)`);
+      if (volumeMultiple < config.playbook_A.volume_mult) {
+        console.log(`[PlaybookA] ${symbol} - Volume ${volumeMultiple.toFixed(2)}x < ${config.playbook_A.volume_mult}x required`);
         return null;
       }
 
@@ -321,8 +316,8 @@ export class SignalGenerator {
       const direction = moveUp > moveDown ? 'BUY' : 'SELL';
 
       // Check if impulse >= 2.5%
-      if (largestMove < 2.0) {  // Tier 2: Relaxed from 2.5%
-        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 2.0% (Tier 2)`);
+      if (largestMove < 2.5) {
+        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 2.5%`);
         return null;
       }
 

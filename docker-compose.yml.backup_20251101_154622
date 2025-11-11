@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongo:
+    image: mongo:7.0
+    container_name: binance-bot-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeThisPassword}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-binance_bot}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - bot-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # BinanceUSBot Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: binance-bot-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3000}
+      DOCKER_ENV: "true"
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeThisPassword}@mongo:27017/${MONGO_DB_NAME:-binance_bot}?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-in-production}
+      BINANCE_US_API_KEY: ${BINANCE_US_API_KEY:-}
+      BINANCE_US_API_SECRET: ${BINANCE_US_API_SECRET:-}
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-sendgrid}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_TO: ${EMAIL_TO:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - bot-network
+    volumes:
+      - app_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/ping', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PPO Training Service (Run separately)
+  ppo-trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: binance-bot-ppo-trainer
+    command: node server/dist/services/tradingEngine/trainPPO.js
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeThisPassword}@mongo:27017/${MONGO_DB_NAME:-binance_bot}?authSource=admin
+      PPO_EPISODES: ${PPO_EPISODES:-1000}
+      BUY_ALLOCATION: ${BUY_ALLOCATION:-0.05}
+      TRAILING_STOP: ${TRAILING_STOP:-0.005}
+      DRAWDOWN_CAP: ${DRAWDOWN_CAP:-0.3}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - bot-network
+    volumes:
+      - ppo_models:/app/models
+    profiles:
+      - training
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: binance-bot-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      - app
+    networks:
+      - bot-network
+    profiles:
+      - with-nginx
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  app_logs:
+    driver: local
+  ppo_models:
+    driver: local
+  nginx_cache:
+    driver: local
