@@ -48,12 +48,8 @@ export function DashboardCleanMyMac() {
 
   if (loading || !botStatus) {
     return (
-      <div className="cmm-dashboard">
-        <div className="cmm-content">
-          <div className="flex items-center justify-center h-screen">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-          </div>
-        </div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
       </div>
     );
   }
@@ -74,8 +70,7 @@ export function DashboardCleanMyMac() {
   const positionGradients: Array<'cyan' | 'pink' | 'green' | 'purple'> = ['cyan', 'pink', 'green', 'purple'];
 
   return (
-    <div className="cmm-dashboard">
-      <div className="cmm-content">
+    <>
         {/* Equity Display */}
         <div className="cmm-equity-section cmm-fade-in">
           <div className="cmm-equity-value">
@@ -254,7 +249,6 @@ export function DashboardCleanMyMac() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </>
   );
 }
