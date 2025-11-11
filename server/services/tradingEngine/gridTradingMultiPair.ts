@@ -1,5 +1,6 @@
 import logger from '../../utils/logger';
 import binanceService from '../binanceService';
+import limitOrderOptimizer from '../limitOrderOptimizer';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import GridOrder from '../../models/GridOrder';
@@ -859,11 +860,13 @@ export class MultiPairGridTradingService {
       
       // Place market sell order
       try {
-        const order = await binanceService.placeOrder({
+        // Use limit order optimizer for better fees (maker vs taker)
+        const order = await limitOrderOptimizer.placeOptimizedOrder({
           symbol: position.symbol,
           side: 'SELL',
-          type: 'MARKET',
-          quantity: position.quantity
+          quantity: position.quantity,
+          targetPrice: candidate.currentPrice,
+          urgency: 'MEDIUM' // Balance between fill speed and maker fees
         });
         
         if (order && order.orderId) {

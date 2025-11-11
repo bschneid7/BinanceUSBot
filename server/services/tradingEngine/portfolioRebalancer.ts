@@ -1,5 +1,6 @@
 import logger from '../../utils/logger';
 import binanceService from '../binanceService';
+import limitOrderOptimizer from '../limitOrderOptimizer';
 import Position from '../../models/Position';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
@@ -222,7 +223,7 @@ export class PortfolioRebalancer {
           const order = await binanceService.placeOrder({
             symbol,
             side: 'SELL',
-            type: 'MARKET',
+            type: 'LIMIT', // Use limit for maker fees
             quantity: holding.quantity
           });
 
