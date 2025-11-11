@@ -58,11 +58,14 @@ class PositionManagementRunner {
    * Start scheduled position management (every 5 minutes)
    */
   startScheduled(): void {
+    console.log('🚀 [PositionMgmtRunner] ===== STARTING SCHEDULED POSITION MANAGEMENT =====');
     logger.info('[PositionMgmtRunner] Starting scheduled position management (every 5 minutes)');
 
     // Run every 5 minutes
     cron.schedule('*/5 * * * *', async () => {
+      console.log('🔔 [PositionMgmtRunner] CRON TRIGGERED at', new Date().toISOString());
       await this.run();
+      console.log('✅ [PositionMgmtRunner] CRON COMPLETED at', new Date().toISOString());
     });
 
     // Run immediately on start

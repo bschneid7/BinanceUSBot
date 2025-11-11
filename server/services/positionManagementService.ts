@@ -71,7 +71,11 @@ class PositionManagementService {
     const symbol = position.symbol;
     
     // Get current price
-    const ticker = await binanceService.getPrice(symbol);
+    const ticker = await binanceService.getTickerPrice(symbol);
+    if (!ticker) {
+      logger.error(`[PositionMgmt] Failed to get price for ${symbol}`);
+      return;
+    }
     const currentPrice = parseFloat(ticker.price);
 
     // Calculate position metrics

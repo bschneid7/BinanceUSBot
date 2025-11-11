@@ -144,14 +144,16 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
   res.status(500).send("There was an error serving your request.");
 });
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-  
-
 // Handle React routing - MUST be last (after all API routes)
 app.get('*', (req: Request, res: Response) => {
   res.sendFile(path.join(clientDistPath, 'index.html'));
 });
+
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+  
+
+
   // Initialize daily snapshot cron job
   initializeSnapshotCron();
   // Initialize position management (every 5 minutes)
