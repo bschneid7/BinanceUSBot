@@ -1,0 +1,88 @@
+/**
+ * CleanMyMac-Inspired Design System
+ * Beautiful gradients, glass morphism, and smooth animations
+ */
+
+:root {
+  /* ===== Background Gradients ===== */
+  --cmm-bg-primary: linear-gradient(135deg, #2D1B69 0%, #1A1A2E 50%, #16213E 100%);
+  --cmm-bg-secondary: linear-gradient(135deg, #3A2463 0%, #252A4A 100%);
+  --cmm-bg-card: linear-gradient(135deg, rgba(58, 36, 99, 0.4) 0%, rgba(37, 42, 74, 0.4) 100%);
+  
+  /* ===== Accent Gradients ===== */
+  --cmm-gradient-cyan: linear-gradient(135deg, #4ECDC4 0%, #44D9E6 100%);
+  --cmm-gradient-pink: linear-gradient(135deg, #FF6B9D 0%, #FF8A80 100%);
+  --cmm-gradient-green: linear-gradient(135deg, #5FD3A8 0%, #4CAF50 100%);
+  --cmm-gradient-purple: linear-gradient(135deg, #9D50BB 0%, #6E48AA 100%);
+  --cmm-gradient-blue: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+  --cmm-gradient-orange: linear-gradient(135deg, #FFA726 0%, #FF7043 100%);
+  
+  /* ===== Glass Morphism ===== */
+  --cmm-glass-bg: rgba(255, 255, 255, 0.05);
+  --cmm-glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --cmm-glass-border: rgba(255, 255, 255, 0.1);
+  --cmm-glass-border-hover: rgba(255, 255, 255, 0.2);
+  
+  /* ===== Text Colors ===== */
+  --cmm-text-primary: #FFFFFF;
+  --cmm-text-secondary: rgba(255, 255, 255, 0.7);
+  --cmm-text-tertiary: rgba(255, 255, 255, 0.5);
+  --cmm-text-quaternary: rgba(255, 255, 255, 0.3);
+  
+  /* ===== Status Colors ===== */
+  --cmm-success: #4CAF50;
+  --cmm-success-light: #81C784;
+  --cmm-warning: #FFA726;
+  --cmm-warning-light: #FFB74D;
+  --cmm-error: #EF5350;
+  --cmm-error-light: #E57373;
+  --cmm-info: #42A5F5;
+  --cmm-info-light: #64B5F6;
+  
+  /* ===== Shadows ===== */
+  --cmm-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --cmm-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
+  --cmm-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
+  --cmm-shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.25);
+  --cmm-shadow-glow-cyan: 0 4px 24px rgba(68, 217, 230, 0.4);
+  --cmm-shadow-glow-pink: 0 4px 24px rgba(255, 107, 157, 0.4);
+  --cmm-shadow-glow-green: 0 4px 24px rgba(95, 211, 168, 0.4);
+  
+  /* ===== Border Radius ===== */
+  --cmm-radius-sm: 8px;
+  --cmm-radius-md: 16px;
+  --cmm-radius-lg: 24px;
+  --cmm-radius-xl: 32px;
+  --cmm-radius-full: 9999px;
+  
+  /* ===== Spacing ===== */
+  --cmm-spacing-xs: 8px;
+  --cmm-spacing-sm: 16px;
+  --cmm-spacing-md: 24px;
+  --cmm-spacing-lg: 32px;
+  --cmm-spacing-xl: 48px;
+  --cmm-spacing-2xl: 64px;
+  
+  /* ===== Transitions ===== */
+  --cmm-transition-fast: 200ms ease-in-out;
+  --cmm-transition-normal: 300ms ease-in-out;
+  --cmm-transition-slow: 500ms ease-in-out;
+  
+  /* ===== Z-Index ===== */
+  --cmm-z-base: 1;
+  --cmm-z-dropdown: 1000;
+  --cmm-z-sticky: 1020;
+  --cmm-z-fixed: 1030;
+  --cmm-z-modal-backdrop: 1040;
+  --cmm-z-modal: 1050;
+  --cmm-z-popover: 1060;
+  --cmm-z-tooltip: 1070;
+}
+
+/* ===== Dark Mode Adjustments ===== */
+.dark {
+  --cmm-glass-bg: rgba(255, 255, 255, 0.03);
+  --cmm-glass-bg-hover: rgba(255, 255, 255, 0.06);
+  --cmm-glass-border: rgba(255, 255, 255, 0.08);
+  --cmm-glass-border-hover: rgba(255, 255, 255, 0.15);
+}

@@ -9,7 +9,7 @@ import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 // Lazy load all other pages for code splitting
-const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Dashboard = lazy(() => import('./pages/DashboardCleanMyMac').then(m => ({ default: m.DashboardCleanMyMac })));
 const Positions = lazy(() => import('./pages/Positions').then(m => ({ default: m.Positions })));
 const TradeHistory = lazy(() => import('./pages/TradeHistory').then(m => ({ default: m.TradeHistory })));
 const TransactionHistory = lazy(() => import('./pages/TransactionHistory').then(m => ({ default: m.TransactionHistory })));
