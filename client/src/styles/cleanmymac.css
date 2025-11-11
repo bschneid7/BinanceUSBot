@@ -28,17 +28,36 @@
   color: var(--cmm-text-primary) !important;
 }
 
-/* Table styling for dark background */
+/* Table styling - use dark text for light backgrounds */
 .cmm-dashboard table {
-  color: var(--cmm-text-primary);
+  /* Don't force color - let it inherit from parent or use default */
 }
 
 .cmm-dashboard th {
-  color: var(--cmm-text-secondary) !important;
+  color: inherit;
   font-weight: 600;
 }
 
 .cmm-dashboard td {
+  color: inherit;
+}
+
+/* Only force white text on tables with dark backgrounds */
+.cmm-dashboard .cmm-glass-card table,
+.cmm-dashboard [class*="bg-dark"] table,
+.cmm-dashboard [class*="bg-secondary"] table {
+  color: var(--cmm-text-primary);
+}
+
+.cmm-dashboard .cmm-glass-card th,
+.cmm-dashboard [class*="bg-dark"] th,
+.cmm-dashboard [class*="bg-secondary"] th {
+  color: var(--cmm-text-secondary) !important;
+}
+
+.cmm-dashboard .cmm-glass-card td,
+.cmm-dashboard [class*="bg-dark"] td,
+.cmm-dashboard [class*="bg-secondary"] td {
   color: var(--cmm-text-primary) !important;
 }
 
