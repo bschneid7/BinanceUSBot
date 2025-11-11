@@ -63,7 +63,7 @@ export const SIGNAL_TIERS: Record<string, SignalTierConfig> = {
  */
 export function determineSignalTier(
   mlConfidence: number,
-  enabledTiers: string[] = ['TIER_2_MODERATE']
+  enabledTiers: string[] = ['TIER_3_AGGRESSIVE']
 ): SignalTierConfig | null {
   // Check tiers in order of confidence (highest first)
   const tierOrder = ['TIER_1_CONSERVATIVE', 'TIER_2_MODERATE', 'TIER_3_AGGRESSIVE'];

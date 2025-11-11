@@ -321,8 +321,8 @@ export class SignalGenerator {
       const direction = moveUp > moveDown ? 'BUY' : 'SELL';
 
       // Check if impulse >= 2.5%
-      if (largestMove < 2.0) {  // Tier 2: Relaxed from 2.5%
-        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 2.0% (Tier 2)`);
+      if (largestMove < 1.5) {  // Tier 3: Aggressive threshold
+        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 1.5% (Tier 3)`);
         return null;
       }
 
