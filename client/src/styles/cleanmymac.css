@@ -11,20 +11,23 @@
   background: var(--cmm-bg-primary);
   position: relative;
   overflow-x: hidden;
+  /* Don't set color here - let pages use their own text colors */
+}
+
+/* Only apply white text to specific CleanMyMac components */
+.cmm-content,
+.cmm-equity-section,
+.cmm-metrics-grid,
+.cmm-glass-card {
   color: var(--cmm-text-primary);
 }
 
-/* Force light text on dark backgrounds for readability */
-.cmm-dashboard *:not(.cmm-btn):not(.cmm-position-icon):not(.cmm-strategy-icon) {
-  color: inherit;
-}
-
-.cmm-dashboard h1,
-.cmm-dashboard h2,
-.cmm-dashboard h3,
-.cmm-dashboard h4,
-.cmm-dashboard h5,
-.cmm-dashboard h6 {
+/* Headings on dark backgrounds should be white */
+.cmm-content h1,
+.cmm-content h2,
+.cmm-content h3,
+.cmm-equity-section h1,
+.cmm-equity-section h2 {
   color: var(--cmm-text-primary) !important;
 }
 
@@ -61,10 +64,12 @@
   color: var(--cmm-text-primary) !important;
 }
 
-/* Ensure labels and descriptions are visible */
-.cmm-dashboard label,
-.cmm-dashboard .text-muted,
-.cmm-dashboard .text-secondary {
+/* Only force light colors on labels within CleanMyMac components */
+.cmm-content label,
+.cmm-equity-section label,
+.cmm-glass-card label,
+.cmm-content .text-muted,
+.cmm-content .text-secondary {
   color: var(--cmm-text-secondary) !important;
 }
 
