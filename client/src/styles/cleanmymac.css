@@ -11,6 +11,42 @@
   background: var(--cmm-bg-primary);
   position: relative;
   overflow-x: hidden;
+  color: var(--cmm-text-primary);
+}
+
+/* Force light text on dark backgrounds for readability */
+.cmm-dashboard *:not(.cmm-btn):not(.cmm-position-icon):not(.cmm-strategy-icon) {
+  color: inherit;
+}
+
+.cmm-dashboard h1,
+.cmm-dashboard h2,
+.cmm-dashboard h3,
+.cmm-dashboard h4,
+.cmm-dashboard h5,
+.cmm-dashboard h6 {
+  color: var(--cmm-text-primary) !important;
+}
+
+/* Table styling for dark background */
+.cmm-dashboard table {
+  color: var(--cmm-text-primary);
+}
+
+.cmm-dashboard th {
+  color: var(--cmm-text-secondary) !important;
+  font-weight: 600;
+}
+
+.cmm-dashboard td {
+  color: var(--cmm-text-primary) !important;
+}
+
+/* Ensure labels and descriptions are visible */
+.cmm-dashboard label,
+.cmm-dashboard .text-muted,
+.cmm-dashboard .text-secondary {
+  color: var(--cmm-text-secondary) !important;
 }
 
 /* Animated background particles */
