@@ -514,10 +514,22 @@ export class TradingEngine {
       const openPositions = await Position.find({ userId, status: 'OPEN' });
 
       // Calculate total unrealized PnL
+      // Exclude positions with unreasonable prices (likely delisted tokens)
       let totalUnrealizedPnl = 0;
+      let excludedPositions = 0;
       openPositions?.forEach(position => {
+        // Skip positions with $0 or missing current_price (likely delisted)
+        if (!position.current_price || position.current_price <= 0 || position.current_price > 1000000) {
+          logger.warn(`[TradingEngine] Excluding ${position.symbol} from equity calculation (unreasonable price: $${position.current_price})`);
+          excludedPositions++;
+          return;
+        }
         totalUnrealizedPnl += position.unrealized_pnl ?? 0;
       });
+      
+      if (excludedPositions > 0) {
+        logger.info(`[TradingEngine] Excluded ${excludedPositions} position(s) with unreasonable prices from equity calculation`);
+      }
 
       // Use existing equity from BotState
       // Get equity from BotState (must be properly initialized)
@@ -587,19 +599,23 @@ export class TradingEngine {
           logger.info(`[TradingEngine] Total portfolio value: $${totalValue.toFixed(2)} (${assetsPriced}/${assetsWithBalance} assets priced)`);
           
           if (totalValue > 0) {
-            // Use calculated value if:
-            // 1. We successfully priced at least 90% of assets (high confidence), OR
-            // 2. Calculated value is at least 80% of existing equity (reasonable change), OR
-            // 3. No existing equity to compare against
+            // Always use calculated value from Binance API if we successfully priced most assets
             const pricingSuccessRate = assetsWithBalance > 0 ? assetsPriced / assetsWithBalance : 0;
-            const minExpectedEquity = (state.equity ?? 0) * 0.8;
             
-            if (pricingSuccessRate >= 0.9 || totalValue >= minExpectedEquity || !state.equity) {
+            if (pricingSuccessRate >= 0.8) {
+              // Trust Binance API if we priced 80%+ of assets
+              const equityChange = totalValue - (state.equity ?? 0);
+              const changePercent = state.equity ? ((equityChange / Math.abs(state.equity)) * 100) : 0;
+              
               baseEquity = totalValue;
               logger.info(`[TradingEngine] ✅ Synced base equity from Binance API: $${baseEquity.toFixed(2)} (pricing success: ${(pricingSuccessRate * 100).toFixed(1)}%)`);
+              
+              if (Math.abs(changePercent) > 10) {
+                logger.info(`[TradingEngine] Equity changed by ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}% ($${equityChange >= 0 ? '+' : ''}${equityChange.toFixed(2)})`);
+              }
             } else {
-              logger.warn(`[TradingEngine] Calculated equity ($${totalValue.toFixed(2)}) is much lower than existing ($${state.equity.toFixed(2)}), keeping existing value`);
-              logger.warn(`[TradingEngine] Pricing success rate: ${(pricingSuccessRate * 100).toFixed(1)}% (${assetsPriced}/${assetsWithBalance} assets)`);
+              logger.warn(`[TradingEngine] Low pricing success rate: ${(pricingSuccessRate * 100).toFixed(1)}% (${assetsPriced}/${assetsWithBalance} assets)`);
+              logger.warn(`[TradingEngine] Keeping existing equity: $${baseEquity.toFixed(2)} (calculated would be: $${totalValue.toFixed(2)})`);
               logger.warn(`[TradingEngine] This usually means price lookups failed for crypto assets`);
               // Keep existing baseEquity
             }
