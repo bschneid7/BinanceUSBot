@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
 import Bottleneck from 'bottleneck';
 import webSocketService from './webSocketService';
+import rateLimitManager from './rateLimitManager';
 
 interface BinanceTickerData {
   symbol: string;
@@ -248,19 +249,50 @@ class BinanceService {
   }
 
   /**
+   * Get API weight for endpoint (Binance weight system)
+   */
+  private getEndpointWeight(endpoint: string, params: Record<string, unknown> = {}): number {
+    // Account endpoints
+    if (endpoint.includes('/api/v3/account')) return 10;
+    if (endpoint.includes('/api/v3/myTrades')) return 10;
+    
+    // Order endpoints
+    if (endpoint.includes('/api/v3/order')) return 1;
+    if (endpoint.includes('/api/v3/openOrders')) return 3;
+    if (endpoint.includes('/api/v3/allOrders')) return 10;
+    
+    // Market data endpoints
+    if (endpoint.includes('/api/v3/klines')) {
+      const limit = Number(params.limit) || 500;
+      return limit <= 100 ? 1 : limit <= 500 ? 2 : 5;
+    }
+    if (endpoint.includes('/api/v3/ticker/24hr')) return 1;
+    if (endpoint.includes('/api/v3/ticker/price')) return 1;
+    if (endpoint.includes('/api/v3/depth')) return 1;
+    
+    // Default weight
+    return 1;
+  }
+
+  /**
    * Make signed request to Binance API with retry logic and rate limiting
-   * ✅ FIXED: Now uses Bottleneck to prevent hitting Binance rate limits
+   * ✅ ENHANCED: Now uses both Bottleneck (concurrency) and RateLimitManager (weight-based)
    */
   private async signedRequest(
     method: 'GET' | 'POST' | 'DELETE',
     endpoint: string,
     params: Record<string, unknown> = {}
   ): Promise<unknown> {
-    // ✅ Determine which limiter to use
+    // ✅ Calculate endpoint weight
+    const weight = this.getEndpointWeight(endpoint, params);
+    
+    // ✅ Acquire weight-based rate limit permission first
+    await rateLimitManager.acquire(weight);
+    
+    // ✅ Then use Bottleneck for concurrency control
     const isOrderEndpoint = endpoint.includes('/api/v3/order');
     const limiter = isOrderEndpoint ? this.orderLimiter : this.limiter;
     
-    // ✅ Wrap the entire request in rate limiter
     return await limiter.schedule(async () => {
       return await this._signedRequestInternal(method, endpoint, params);
     });

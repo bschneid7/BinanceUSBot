@@ -21,6 +21,7 @@ import manualTradeRoutes from './routes/manualTradeRoutes';
 import capitalAllocationRoutes from './routes/capitalAllocationRoutes';
 import orderReconciliationRoutes from './routes/orderReconciliationRoutes';
 import strategyDriftRoutes from './routes/strategyDriftRoutes';
+import rateLimitRoutes from './routes/rateLimitRoutes';
 import riskRoutes from './routes/riskRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import controlRoutes from './routes/controlRoutes';
@@ -38,6 +39,7 @@ import logger from './utils/logger';
 import positionMgmtRunner from "./runPositionManagement";
 import orderReconciliationService from './services/orderReconciliationService';
 import strategyDriftDetector from './services/strategyDriftDetector';
+import gracefulShutdownManager from './services/gracefulShutdownManager';
 // Load environment variables
 dotenv.config();
 if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
@@ -123,6 +125,7 @@ app.use('/api/risk', riskRoutes);
 app.use('/api', capitalAllocationRoutes);
 app.use('/api/reconciliation', orderReconciliationRoutes);
 app.use('/api/drift', strategyDriftRoutes);
+app.use('/api/rate-limit', rateLimitRoutes);
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {
   try {
@@ -157,10 +160,13 @@ app.get('*', (req: Request, res: Response) => {
   res.sendFile(path.join(clientDistPath, 'index.html'));
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
   
-
+  // Register server with graceful shutdown manager
+  gracefulShutdownManager.registerServer(server);
+  gracefulShutdownManager.registerSignalHandlers();
+  console.log('[GracefulShutdown] Graceful shutdown handlers registered');
 
   // Initialize daily snapshot cron job
   initializeSnapshotCron();
