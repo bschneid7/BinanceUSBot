@@ -1,0 +1,552 @@
+/**
+ * CleanMyMac Mobile Enhancements
+ * Comprehensive mobile and landscape optimization
+ */
+
+/* ===== Mobile-First Base Adjustments ===== */
+
+/* Ensure smooth scrolling on mobile */
+html {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Prevent text size adjustment on orientation change */
+html, body {
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Improve touch targets - minimum 44x44px */
+button, a, input, select, textarea {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* ===== Enhanced Mobile Breakpoints ===== */
+
+/* Extra Small Devices (phones, portrait) */
+@media (max-width: 480px) {
+  .cmm-content {
+    padding: var(--cmm-spacing-xs) !important;
+  }
+  
+  .cmm-equity-value {
+    font-size: 2rem !important;
+    line-height: 1.2;
+  }
+  
+  .cmm-equity-label {
+    font-size: 0.875rem !important;
+  }
+  
+  .cmm-section-header {
+    font-size: 1.5rem !important;
+  }
+  
+  .cmm-glass-card {
+    padding: var(--cmm-spacing-sm) !important;
+  }
+  
+  .cmm-metric-icon {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  
+  .cmm-circular-progress {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  
+  .cmm-circular-progress-text {
+    font-size: 1.25rem !important;
+  }
+  
+  .cmm-btn {
+    width: 100%;
+    padding: 12px 24px !important;
+    font-size: 0.875rem !important;
+  }
+  
+  .cmm-strategies-grid {
+    flex-direction: column;
+  }
+  
+  .cmm-strategy-badge {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Small Devices (phones, 481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .cmm-content {
+    padding: var(--cmm-spacing-sm) !important;
+  }
+  
+  .cmm-equity-value {
+    font-size: 2.5rem !important;
+  }
+  
+  .cmm-metrics-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: var(--cmm-spacing-sm);
+  }
+  
+  .cmm-positions-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ===== Landscape Orientation Optimization ===== */
+
+/* Mobile Landscape (phones in landscape) */
+@media (max-height: 480px) and (orientation: landscape) {
+  .cmm-dashboard {
+    min-height: auto;
+  }
+  
+  .cmm-content {
+    padding: var(--cmm-spacing-xs) var(--cmm-spacing-sm) !important;
+  }
+  
+  .cmm-equity-section {
+    margin-bottom: var(--cmm-spacing-md) !important;
+  }
+  
+  .cmm-equity-value {
+    font-size: 1.75rem !important;
+    margin-bottom: 0 !important;
+  }
+  
+  .cmm-equity-label {
+    font-size: 0.75rem !important;
+    margin-bottom: 0 !important;
+  }
+  
+  .cmm-equity-change {
+    font-size: 0.75rem !important;
+  }
+  
+  .cmm-section-header {
+    font-size: 1.25rem !important;
+    margin-top: var(--cmm-spacing-sm) !important;
+    margin-bottom: var(--cmm-spacing-xs) !important;
+  }
+  
+  .cmm-metrics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+    gap: var(--cmm-spacing-xs);
+    margin-bottom: var(--cmm-spacing-md) !important;
+  }
+  
+  .cmm-metric-icon {
+    width: 60px !important;
+    height: 60px !important;
+    margin-bottom: var(--cmm-spacing-xs) !important;
+  }
+  
+  .cmm-circular-progress {
+    width: 60px !important;
+    height: 60px !important;
+  }
+  
+  .cmm-circular-progress-text {
+    font-size: 1rem !important;
+  }
+  
+  .cmm-circular-progress-subtitle {
+    font-size: 0.625rem !important;
+  }
+  
+  .cmm-metric-label {
+    font-size: 1rem !important;
+    margin-bottom: 2px !important;
+  }
+  
+  .cmm-metric-value {
+    font-size: 0.75rem !important;
+  }
+  
+  .cmm-glass-card {
+    padding: var(--cmm-spacing-xs) !important;
+  }
+  
+  .cmm-positions-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+    gap: var(--cmm-spacing-xs);
+  }
+  
+  .cmm-position-card {
+    padding: var(--cmm-spacing-xs) !important;
+  }
+  
+  .cmm-position-icon {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 0.875rem !important;
+  }
+  
+  .cmm-position-symbol {
+    font-size: 0.875rem !important;
+  }
+  
+  .cmm-btn {
+    padding: 8px 24px !important;
+    font-size: 0.875rem !important;
+  }
+}
+
+/* Tablet Landscape (tablets in landscape, 769px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
+  .cmm-metrics-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+  
+  .cmm-positions-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+/* ===== Touch-Friendly Enhancements ===== */
+
+/* Larger tap targets for mobile */
+@media (max-width: 768px) {
+  .cmm-btn {
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+  
+  .cmm-glass-card {
+    touch-action: manipulation;
+  }
+  
+  .cmm-position-card {
+    touch-action: manipulation;
+  }
+  
+  .cmm-strategy-badge {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  
+  /* Remove hover effects on touch devices */
+  .cmm-glass-card:hover {
+    transform: none;
+  }
+  
+  .cmm-position-card:hover {
+    transform: none;
+  }
+  
+  .cmm-strategy-badge:hover {
+    transform: none;
+  }
+  
+  /* Add active states for touch feedback */
+  .cmm-btn:active {
+    transform: scale(0.95);
+  }
+  
+  .cmm-glass-card:active {
+    transform: scale(0.98);
+  }
+  
+  .cmm-position-card:active {
+    transform: scale(0.98);
+  }
+}
+
+/* ===== Table Responsiveness ===== */
+
+@media (max-width: 768px) {
+  /* Make tables scrollable horizontally */
+  .cmm-dashboard table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  
+  .cmm-dashboard thead,
+  .cmm-dashboard tbody,
+  .cmm-dashboard tr,
+  .cmm-dashboard th,
+  .cmm-dashboard td {
+    display: block;
+  }
+  
+  .cmm-dashboard thead {
+    display: none; /* Hide headers on mobile */
+  }
+  
+  .cmm-dashboard tr {
+    margin-bottom: var(--cmm-spacing-sm);
+    border: 1px solid var(--cmm-glass-border);
+    border-radius: var(--cmm-radius-sm);
+    padding: var(--cmm-spacing-xs);
+    background: var(--cmm-glass-bg);
+  }
+  
+  .cmm-dashboard td {
+    text-align: right;
+    padding: var(--cmm-spacing-xs) var(--cmm-spacing-sm);
+    position: relative;
+    border: none;
+  }
+  
+  .cmm-dashboard td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: var(--cmm-spacing-sm);
+    font-weight: 600;
+    color: var(--cmm-text-secondary);
+    text-align: left;
+  }
+}
+
+/* Alternative: Horizontal scroll for tables on mobile */
+.cmm-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 calc(-1 * var(--cmm-spacing-sm));
+  padding: 0 var(--cmm-spacing-sm);
+}
+
+@media (max-width: 768px) {
+  .cmm-table-wrapper {
+    margin: 0 calc(-1 * var(--cmm-spacing-xs));
+    padding: 0 var(--cmm-spacing-xs);
+  }
+}
+
+/* ===== Typography Adjustments ===== */
+
+@media (max-width: 768px) {
+  /* Scale down all text slightly for mobile */
+  body {
+    font-size: 14px;
+  }
+  
+  h1 {
+    font-size: 1.75rem;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+  }
+  
+  h3 {
+    font-size: 1.25rem;
+  }
+  
+  h4 {
+    font-size: 1.125rem;
+  }
+  
+  /* Improve readability */
+  p, li {
+    line-height: 1.6;
+  }
+}
+
+/* ===== Spacing Adjustments ===== */
+
+@media (max-width: 768px) {
+  /* Reduce spacing on mobile */
+  .cmm-metrics-grid {
+    gap: var(--cmm-spacing-xs) !important;
+    margin-bottom: var(--cmm-spacing-md) !important;
+  }
+  
+  .cmm-positions-grid {
+    gap: var(--cmm-spacing-xs) !important;
+  }
+  
+  .cmm-strategies-grid {
+    gap: var(--cmm-spacing-xs) !important;
+  }
+  
+  .cmm-equity-section {
+    margin-bottom: var(--cmm-spacing-md) !important;
+  }
+}
+
+/* ===== Performance Optimizations ===== */
+
+@media (max-width: 768px) {
+  /* Reduce animation complexity on mobile */
+  .cmm-dashboard::before {
+    animation: none;
+    opacity: 0.5;
+  }
+  
+  /* Simplify backdrop blur for better performance */
+  .cmm-glass-card {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  
+  .cmm-position-card {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  
+  .cmm-strategy-badge {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* ===== Safe Area Insets (for notched devices) ===== */
+
+@supports (padding: max(0px)) {
+  .cmm-content {
+    padding-left: max(var(--cmm-spacing-xl), env(safe-area-inset-left));
+    padding-right: max(var(--cmm-spacing-xl), env(safe-area-inset-right));
+    padding-top: max(var(--cmm-spacing-xl), env(safe-area-inset-top));
+    padding-bottom: max(var(--cmm-spacing-xl), env(safe-area-inset-bottom));
+  }
+  
+  @media (max-width: 768px) {
+    .cmm-content {
+      padding-left: max(var(--cmm-spacing-sm), env(safe-area-inset-left));
+      padding-right: max(var(--cmm-spacing-sm), env(safe-area-inset-right));
+      padding-top: max(var(--cmm-spacing-sm), env(safe-area-inset-top));
+      padding-bottom: max(var(--cmm-spacing-sm), env(safe-area-inset-bottom));
+    }
+  }
+}
+
+/* ===== Prevent Zoom on Input Focus (iOS) ===== */
+
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important; /* Prevents iOS zoom */
+  }
+}
+
+/* ===== Hide Scrollbars on Mobile (optional) ===== */
+
+@media (max-width: 768px) {
+  .cmm-dashboard::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .cmm-dashboard {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* ===== Utility Classes for Mobile ===== */
+
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block;
+  }
+  
+  .desktop-only {
+    display: none;
+  }
+  
+  .mobile-hidden {
+    display: none !important;
+  }
+  
+  .mobile-full-width {
+    width: 100% !important;
+  }
+  
+  .mobile-text-center {
+    text-align: center !important;
+  }
+}
+
+/* ===== Landscape-Specific Utility Classes ===== */
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .landscape-hidden {
+    display: none !important;
+  }
+  
+  .landscape-compact {
+    padding: var(--cmm-spacing-xs) !important;
+    margin: var(--cmm-spacing-xs) 0 !important;
+  }
+}
+
+/* ===== Grid Improvements for Mobile ===== */
+
+@media (max-width: 480px) {
+  .cmm-metrics-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .cmm-positions-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ===== Enhanced Touch Feedback ===== */
+
+@media (hover: none) and (pointer: coarse) {
+  /* Touch device specific styles */
+  .cmm-btn {
+    -webkit-tap-highlight-color: rgba(68, 217, 230, 0.3);
+  }
+  
+  .cmm-glass-card {
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .cmm-position-card {
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .cmm-strategy-badge {
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ===== Accessibility Improvements ===== */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .cmm-dashboard::before {
+    animation: none;
+  }
+}
+
+/* ===== Print Styles ===== */
+
+@media print {
+  .cmm-dashboard::before {
+    display: none;
+  }
+  
+  .cmm-glass-card {
+    backdrop-filter: none;
+    background: white;
+    border: 1px solid #ddd;
+  }
+  
+  .cmm-btn {
+    display: none;
+  }
+}
