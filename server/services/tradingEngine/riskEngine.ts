@@ -97,11 +97,11 @@ export class RiskEngine {
           
           if (worstPnL < rotationThreshold) {
             logger.info(`[RiskEngine] Smart rotation opportunity: Worst position ${worstPosition.symbol} has P&L $${worstPnL.toFixed(2)}`);
-            logger.info(`[RiskEngine] NOTE: Auto-rotation is logged but not executed yet - implement closePosition call if desired`);
-            // TODO: Uncomment to enable auto-rotation
-            // await positionManager.closePosition(worstPosition._id, 'AUTO_ROTATE');
-            // logger.info(`[RiskEngine] Rotated out ${worstPosition.symbol} to make room for ${symbol}`);
-            // return { approved: true }; // Approve new position after rotation
+            logger.info(`[RiskEngine] Executing auto-rotation to make room for new signal`);
+            // Auto-rotation enabled
+            await positionManager.closePosition(worstPosition._id, 'AUTO_ROTATE');
+            logger.info(`[RiskEngine] Rotated out ${worstPosition.symbol} to make room for ${symbol}`);
+            return { approved: true }; // Approve new position after rotation
           }
         }
         
