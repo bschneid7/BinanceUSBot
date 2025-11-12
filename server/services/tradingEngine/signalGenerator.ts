@@ -6,6 +6,7 @@ import { MarketData } from './marketScanner';
 import binanceService from '../binanceService';
 import getCDDHelper from '../cddDataHelper';
 import { SIGNAL_TIERS } from '../../config/signalTierConfig';
+import { ACTIVE_TIER, ACTIVE_PARAMS } from '../../config/signalTiers';
 
 export interface TradingSignal {
   symbol: string;
@@ -320,9 +321,12 @@ export class SignalGenerator {
       const largestMove = Math.max(moveUp, moveDown);
       const direction = moveUp > moveDown ? 'BUY' : 'SELL';
 
-      // Check if impulse >= 2.5%
-      if (largestMove < 1.5) {  // Tier 3: Aggressive threshold
-        console.log(`[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < 1.5% (Tier 3)`);
+      // Check if impulse meets active tier threshold
+      if (largestMove < ACTIVE_PARAMS.impulsePct) {
+        console.log(
+          `[PlaybookC] ${symbol} - No impulse: ${largestMove.toFixed(2)}% < ` +
+          `${ACTIVE_PARAMS.impulsePct}% (${ACTIVE_TIER})`
+        );
         return null;
       }
 

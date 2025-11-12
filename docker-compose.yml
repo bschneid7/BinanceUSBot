@@ -10,8 +10,8 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeThisPassword}
       MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-binance_bot}
-    ports:
-      - "${MONGO_PORT:-27017}:27017"
+    # ports:
+    #   - "${MONGO_PORT:-27017}:27017"  # REMOVED: MongoDB should not be exposed to internet
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
@@ -46,6 +46,7 @@ services:
       EMAIL_TO: ${EMAIL_TO:-}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       ML_ENHANCED_SIGNALS: ${ML_ENHANCED_SIGNALS:-false}
+      SIGNAL_TIER: ${SIGNAL_TIER:-TIER_3_AGGRESSIVE}
     ports:
       - "${APP_PORT:-3000}:3000"
     depends_on:

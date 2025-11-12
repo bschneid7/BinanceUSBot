@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
+// Validate environment variables at boot (will throw if invalid)
+import { env } from './config/env';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import basicRoutes from './routes/index';
