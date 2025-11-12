@@ -303,17 +303,26 @@ export class ExecutionRouter {
         );
       }
 
+      // Force LIMIT_MAKER for maker-only execution (0.0% fee)
+      // LIMIT_MAKER will be rejected with -2010 if it would match immediately
+      const orderType = params.type === 'LIMIT' ? 'LIMIT_MAKER' : params.type;
+      
       // Place order on exchange
       const binanceOrder = await binanceService.placeOrder({
         symbol: params.symbol,
         side: params.side,
-        type: params.type,
+        type: orderType,
         quantity: params.quantity,
         price: params.price,
         stopPrice: params.stopPrice,
-        timeInForce: params.type === 'LIMIT' ? 'GTC' : undefined,
+        timeInForce: orderType === 'LIMIT_MAKER' ? 'GTC' : undefined,
         newClientOrderId: params.clientOrderId,
       });
+      
+      logger.info(
+        `[ExecutionRouter] Order placed: ${params.symbol} ${orderType} ` +
+        `${params.side} ${params.quantity} @ ${params.price}`
+      );
 
       // Update order record with exchange response
       order.exchangeOrderId = binanceOrder.orderId.toString();
@@ -395,7 +404,40 @@ export class ExecutionRouter {
         filledQuantity: order.filledQuantity,
         fees: order.fees,
       };
-    } catch (error) {
+    } catch (error: any) {
+      // Check if this is a -2010 error (LIMIT_MAKER would immediately match)
+      const is2010Error = error?.message?.includes('-2010') || 
+                          error?.message?.includes('would immediately match');
+      
+      if (is2010Error && params.type === 'LIMIT' && params.price) {
+        logger.warn(
+          `[ExecutionRouter] LIMIT_MAKER rejected (-2010) for ${params.symbol}, repricing...`
+        );
+        
+        // Reprice order away from market
+        // BUY: Lower price (more conservative)
+        // SELL: Higher price (more conservative)
+        const tickSize = parseFloat(
+          exchangeFilters.getFilters(params.symbol)?.priceFilter?.tickSize || '0.01'
+        );
+        
+        const repricedPrice = params.side === 'BUY'
+          ? params.price - tickSize  // Lower for BUY
+          : params.price + tickSize; // Higher for SELL
+        
+        logger.info(
+          `[ExecutionRouter] Repricing ${params.symbol} ${params.side}: ` +
+          `${params.price} → ${repricedPrice}`
+        );
+        
+        // Retry with repriced order
+        return this.placeOrder(userId, {
+          ...params,
+          price: repricedPrice,
+          clientOrderId: `${params.clientOrderId}_r1`, // Add retry suffix
+        }, positionId);
+      }
+      
       logger.error('[ExecutionRouter] Error placing order:', error);
 
       // Update order record with error
