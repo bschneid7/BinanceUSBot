@@ -116,24 +116,124 @@ class RateLimitManager {
   }
 
   /**
-   * Execute a function with rate limiting
+   * Execute a function with rate limiting and exponential backoff
    */
   async rateLimitedCall<T>(
     func: () => Promise<T>,
     weight: number = 1,
-    description?: string
+    description?: string,
+    maxRetries: number = 3
   ): Promise<T> {
-    await this.acquire(weight);
+    let lastError: any;
     
-    try {
-      const result = await func();
-      return result;
-    } catch (error) {
-      if (this.config.enableLogging) {
-        logger.error(`[RateLimitManager] Error in rate-limited call${description ? ` (${description})` : ''}:`, error);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      await this.acquire(weight);
+      
+      try {
+        const result = await func();
+        
+        // Success - reset any backoff state
+        if (attempt > 0 && this.config.enableLogging) {
+          logger.info(
+            `[RateLimitManager] Retry successful after ${attempt} attempts${description ? ` (${description})` : ''}`
+          );
+        }
+        
+        return result;
+      } catch (error: any) {
+        lastError = error;
+        
+        // Check if this is a retryable error
+        const isRetryable = this.isRetryableError(error);
+        
+        if (!isRetryable) {
+          if (this.config.enableLogging) {
+            logger.error(
+              `[RateLimitManager] Non-retryable error${description ? ` (${description})` : ''}:`,
+              error
+            );
+          }
+          throw error;
+        }
+        
+        // Check if we've exhausted retries
+        if (attempt >= maxRetries) {
+          if (this.config.enableLogging) {
+            logger.error(
+              `[RateLimitManager] Max retries (${maxRetries}) exceeded${description ? ` (${description})` : ''}:`,
+              error
+            );
+          }
+          throw error;
+        }
+        
+        // Calculate exponential backoff delay
+        const delay = Math.min(1000 * Math.pow(2, attempt), 16000); // Max 16 seconds
+        const jitter = delay * 0.5 * Math.random(); // Add jitter
+        const totalDelay = Math.floor(delay + jitter);
+        
+        if (this.config.enableLogging) {
+          logger.warn(
+            `[RateLimitManager] Attempt ${attempt + 1}/${maxRetries + 1} failed, ` +
+            `retrying in ${totalDelay}ms${description ? ` (${description})` : ''}: ${error.message}`
+          );
+        }
+        
+        // Wait before retry
+        await this.sleep(totalDelay);
       }
-      throw error;
     }
+    
+    // Should never reach here, but TypeScript needs it
+    throw lastError;
+  }
+  
+  /**
+   * Check if error is retryable
+   */
+  private isRetryableError(error: any): boolean {
+    if (!error) return false;
+    
+    // Rate limit errors (429) are always retryable
+    if (error.status === 429 || error.statusCode === 429) {
+      return true;
+    }
+    
+    // Check error message
+    const message = error.message?.toLowerCase() || '';
+    if (message.includes('429') || message.includes('too many requests')) {
+      return true;
+    }
+    
+    // Binance WAF limit (IP banned)
+    if (error.code === -1003) {
+      return true;
+    }
+    
+    // Network errors
+    if (
+      message.includes('econnreset') ||
+      message.includes('etimedout') ||
+      message.includes('enotfound') ||
+      message.includes('network') ||
+      message.includes('timeout')
+    ) {
+      return true;
+    }
+    
+    // 5xx server errors
+    const status = error.status || error.statusCode || 0;
+    if (status >= 500 && status < 600) {
+      return true;
+    }
+    
+    // 4xx client errors are NOT retryable (except 429)
+    if (status >= 400 && status < 500) {
+      return false;
+    }
+    
+    // Unknown errors: don't retry
+    return false;
   }
 
   /**
