@@ -132,6 +132,39 @@ services:
     profiles:
       - monitoring
 
+  # Loki Log Aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: binance-bot-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - bot-network
+    profiles:
+      - monitoring
+
+  # Promtail Log Shipper
+  promtail:
+    image: grafana/promtail:latest
+    container_name: binance-bot-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    networks:
+      - bot-network
+    profiles:
+      - monitoring
+
   # Node Exporter for System Metrics
   node-exporter:
     image: prom/node-exporter:latest
@@ -190,4 +223,6 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  loki_data:
     driver: local

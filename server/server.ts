@@ -6,6 +6,7 @@ import { env } from './config/env';
 import exchangeFilters from './services/exchangeFilters';
 import { slackNotifier } from './services/slackNotifier';
 import { metricsService } from './services/metricsService';
+import { healthCheckService } from './services/healthCheckService';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import basicRoutes from './routes/index';
@@ -145,9 +146,40 @@ app.get('/metrics', async (req: Request, res: Response) => {
 app.get('/api/metrics', (req: Request, res: Response) => {
   metricsService.metricsEndpoint(req, res);
 });
-// Health check endpoint
+// Health check endpoints
 app.get('/healthz', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Detailed health check endpoint
+app.get('/api/health', async (req: Request, res: Response) => {
+  try {
+    const health = await healthCheckService.performHealthCheck();
+    const statusCode = health.healthy ? 200 : 503;
+    res.status(statusCode).json(health);
+  } catch (error: any) {
+    logger.error('[Server] Health check failed:', error);
+    res.status(503).json({
+      healthy: false,
+      timestamp: new Date().toISOString(),
+      error: error.message,
+    });
+  }
+});
+
+// Quick health status endpoint
+app.get('/api/health/status', (req: Request, res: Response) => {
+  const lastStatus = healthCheckService.getLastHealthStatus();
+  if (lastStatus) {
+    const statusCode = lastStatus.healthy ? 200 : 503;
+    res.status(statusCode).json(lastStatus);
+  } else {
+    res.status(503).json({
+      healthy: false,
+      timestamp: new Date().toISOString(),
+      message: 'Health check not yet performed',
+    });
+  }
 });
 // Serve static files from React app in production
 // Use dynamic path based on environment
@@ -187,6 +219,10 @@ const server = app.listen(port, () => {
   
   // Initialize strategy drift detection (every 24 hours)
   strategyDriftDetector.startAutoDriftDetection(24);
+  
+  // Start health check service
+  healthCheckService.start();
+  console.log('[HealthCheck] Health monitoring started');
   
   // Load exchange filters and start daily refresh
   (async () => {
