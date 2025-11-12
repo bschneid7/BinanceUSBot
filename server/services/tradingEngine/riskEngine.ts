@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import Position from '../../models/Position';
 import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
+import positionManager from './positionManager';
 
 export interface RiskCheckResult {
   approved: boolean;
