@@ -23,7 +23,9 @@ A fully autonomous, headless trading bot designed for aggressive spot cryptocurr
 - **PPO Reinforcement Learning** - Optimizes buy/sell decisions via TensorFlow.js (state: OHLCV/sentiment; actions: buy/sell/hold; rewards: profit - drawdown)
 - **Advanced Risk Management** - Position sizing, correlation guards, kill-switches, 30% max drawdown cap
 - **Smart Execution** - Maker-first orders, slippage protection, OCO brackets, 0.5% trailing stop-buy
-- **Aggressive Trading** - 5% buy allocation per signal with ML sentiment integration
+- **TIER_3_AGGRESSIVE Trading** - 1.5% impulse threshold, 1.0% position sizing, optimized for ranging markets
+- **Dynamic Equity Calculation** - Real-time sync from Binance API, handles delisted tokens gracefully
+- **Mobile-Responsive Dashboard** - Full landscape support, touch-friendly controls, adaptive layouts
 
 ### Tax Compliance
 - **Lot-Level Tracking** - HIFO (Highest-In-First-Out) cost basis calculation
@@ -347,10 +349,17 @@ curl -X POST http://localhost:3000/api/auth/login \
 
 ## 📚 Documentation
 
+### Setup & Deployment
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete deployment guide for Digital Ocean with Docker
 - **[QUICK_START_BINANCE.md](./QUICK_START_BINANCE.md)** - Binance.US API integration guide
 - **[BINANCE_INTEGRATION_SUMMARY.md](./BINANCE_INTEGRATION_SUMMARY.md)** - Detailed integration documentation
 - **[server/docs/BINANCE_INTEGRATION.md](./server/docs/BINANCE_INTEGRATION.md)** - Technical integration details
+
+### Configuration & Operations
+- **[CONFIGURATION.md](./CONFIGURATION.md)** - Current bot configuration and settings (TIER_3_AGGRESSIVE, mobile UX, equity calculation)
+- **[TIER_3_AGGRESSIVE_DEPLOYMENT_SUMMARY.md](./TIER_3_AGGRESSIVE_DEPLOYMENT_SUMMARY.md)** - Signal tier deployment details
+- **[EQUITY_FIX_SUMMARY.md](./EQUITY_FIX_SUMMARY.md)** - Equity calculation fix and dynamic sync implementation
+- **[MOBILE_UX_OPTIMIZATION_SUMMARY.md](./MOBILE_UX_OPTIMIZATION_SUMMARY.md)** - Mobile dashboard optimization details
 
 ## 📁 Project Structure
 
