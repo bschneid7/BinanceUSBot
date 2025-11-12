@@ -21,6 +21,7 @@ import multiPairGridTradingService from './gridTradingMultiPair';
 import { portfolioRebalancer } from './portfolioRebalancer';
 import { slackNotifier } from '../slackNotifier';
 import { metricsService } from '../metricsService';
+import { mlOrchestrator } from '../ml/mlOrchestrator';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -330,10 +331,43 @@ export class TradingEngine {
         }
       }
 
-      // Step 6: Process signals
+      // Step 6: Enhance signals with ML (if enabled)
+      const enhancedSignals = [];
+      for (const signal of signals) {
+        try {
+          // Get market data for this symbol
+          const symbolMarketData = marketData.find(m => m.symbol === signal.symbol);
+          if (!symbolMarketData) {
+            logger.warn(`[TradingEngine] No market data for ${signal.symbol}, skipping ML enhancement`);
+            enhancedSignals.push({ original: signal, enhanced: null });
+            continue;
+          }
+
+          // Get current equity for position sizing
+          const state = await BotState.findOne({ userId });
+          const currentEquity = state?.equity || 10000;
+
+          // Process through ML orchestrator
+          const mlSignal = await mlOrchestrator.processSignal(
+            signal,
+            symbolMarketData,
+            currentEquity,
+            state?.recentWinRate
+          );
+
+          enhancedSignals.push({ original: signal, enhanced: mlSignal });
+        } catch (error) {
+          logger.error(`[TradingEngine] ML enhancement failed for ${signal.symbol}:`, error);
+          enhancedSignals.push({ original: signal, enhanced: null });
+        }
+      }
+
+      // Step 7: Process signals (ML-enhanced or original)
       // Process signals in parallel for better performance
       const results = await Promise.allSettled(
-        signals.map(signal => this.processSignalWithRetry(userId, signal))
+        enhancedSignals.map(({ original, enhanced }) => 
+          this.processSignalWithRetry(userId, enhanced || original, enhanced)
+        )
       );
       
       // Log any failures
@@ -355,11 +389,12 @@ export class TradingEngine {
   private async processSignalWithRetry(
     userId: Types.ObjectId,
     signal: typeof signalGenerator.prototype,
+    mlEnhanced: any = null,
     maxRetries: number = 2
   ): Promise<void> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        await this.processSignal(userId, signal);
+        await this.processSignal(userId, signal, mlEnhanced);
         return; // Success - exit retry loop
       } catch (error) {
         const isLastAttempt = attempt === maxRetries;
@@ -389,7 +424,8 @@ export class TradingEngine {
    */
   private async processSignal(
     userId: Types.ObjectId,
-    signal: typeof signalGenerator.prototype
+    signal: typeof signalGenerator.prototype,
+    mlEnhanced: any = null
   ): Promise<void> {
     try {
       logger.info(`[TradingEngine] Processing signal: ${signal.symbol} ${signal.playbook} ${signal.action}`);
@@ -436,11 +472,22 @@ export class TradingEngine {
         return;
       }
       
-      let quantity = riskEngine.calculatePositionSize(
-        signal.entryPrice,
-        signal.stopPrice,
-        riskAmount
-      );
+      // Use ML position sizing if available, otherwise fall back to standard
+      let quantity;
+      let mlPositionInfo = null;
+      
+      if (mlEnhanced && mlEnhanced.positionSize) {
+        quantity = mlEnhanced.positionSize.quantity;
+        mlPositionInfo = mlEnhanced.positionSize;
+        logger.info(`[TradingEngine] Using ML position size: ${quantity.toFixed(6)} (${mlPositionInfo.reasoning[0]})`);
+      } else {
+        quantity = riskEngine.calculatePositionSize(
+          signal.entryPrice,
+          signal.stopPrice,
+          riskAmount
+        );
+        logger.info(`[TradingEngine] Using standard position size: ${quantity.toFixed(6)}`);
+      }
 
       // Calculate notional value
       let notional = quantity * signal.entryPrice;
