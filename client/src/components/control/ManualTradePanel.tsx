@@ -29,7 +29,7 @@ export const ManualTradePanel: React.FC = () => {
     const { data: symbolsData } = useQuery({
         queryKey: ['symbols'],
         queryFn: async () => {
-            const res = await fetch('/api/trade/symbols');
+            const res = await fetch('/api/manual-trade/symbols');
             return res.json();
         }
     });
@@ -37,7 +37,7 @@ export const ManualTradePanel: React.FC = () => {
     // Validate trade mutation
     const validateTrade = useMutation({
         mutationFn: async () => {
-            const res = await fetch('/api/trade/validate', {
+            const res = await fetch('/api/manual-trade/validate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -57,7 +57,7 @@ export const ManualTradePanel: React.FC = () => {
     // Execute trade mutation
     const executeTrade = useMutation({
         mutationFn: async (force: boolean = false) => {
-            const res = await fetch('/api/trade/manual', {
+            const res = await fetch('/api/manual-trade/manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
