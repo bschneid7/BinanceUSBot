@@ -10,7 +10,7 @@ import { ACTIVE_TIER, ACTIVE_PARAMS } from '../../config/signalTiers';
 
 export interface TradingSignal {
   symbol: string;
-  playbook: 'A' | 'B' | 'C' | 'D';
+  playbook: 'A' | 'B' | 'C' | 'D' | 'E';
   action: 'BUY' | 'SELL';
   entryPrice: number;
   stopPrice: number;
@@ -117,6 +117,23 @@ export class SignalGenerator {
             }
           } catch (error) {
             console.error(`[SignalGenerator] Playbook D failed for ${market.symbol}:`, error);
+          }
+        }
+
+        // Playbook E: Buy the Dip (Gradual Declines)
+        if (config.playbook_E?.enable) {
+          try {
+            const signalE = await this.checkPlaybookE(userId, market, config);
+            if (signalE && this.validateSignal(signalE)) {
+              // Phase 1: Funding Rate Filter
+              if (await this.passesFundingFilter(signalE)) {
+                signals.push(signalE);
+              } else {
+                console.log(`[SignalGenerator] Signal filtered by funding rate: ${signalE.symbol} ${signalE.action}`);
+              }
+            }
+          } catch (error) {
+            console.error(`[SignalGenerator] Playbook E failed for ${market.symbol}:`, error);
           }
         }
       }
@@ -408,9 +425,9 @@ export class SignalGenerator {
       const lastReturn = returns[returns.length - 1];
       const sigmaMove = (lastReturn - mean) / stdDev;
 
-      // Trigger: return <= -1.5σ (flash crash)
-      if (sigmaMove > -1.5) {
-        console.log(`[PlaybookD] ${symbol} - No flash crash: ${sigmaMove.toFixed(2)}σ > -1.5σ`);
+      // Trigger: return <= -1.0σ (flash crash) - LOWERED from -1.5σ to catch 2%+ drops
+      if (sigmaMove > -1.0) {
+        console.log(`[PlaybookD] ${symbol} - No flash crash: ${sigmaMove.toFixed(2)}σ > -1.0σ`);
         return null;
       }
 
@@ -445,6 +462,86 @@ export class SignalGenerator {
       };
     } catch (error) {
       console.error(`[PlaybookD] Error checking ${market.symbol}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Playbook E: Buy the Dip (Gradual Declines)
+   * Entry: 1-3% decline from recent high with RSI oversold confirmation
+   */
+  private async checkPlaybookE(
+    userId: Types.ObjectId,
+    market: MarketData,
+    config: typeof BotConfig.prototype
+  ): Promise<TradingSignal | null> {
+    try {
+      const { symbol, price, atr } = market;
+
+      // Fetch 1h klines for trend analysis
+      const klines1h = await binanceService.getKlines(symbol, '1h', 50);
+      if (klines1h.length < 30) return null;
+
+      // Calculate recent high (last 24 hours)
+      const recentHighs = klines1h.slice(-24).map(k => parseFloat(k.high));
+      const recentHigh = Math.max(...recentHighs);
+
+      // Calculate decline from recent high
+      const declinePercent = ((recentHigh - price) / recentHigh) * 100;
+
+      // Trigger: 1-3% decline from recent high
+      if (declinePercent < 1.0) {
+        console.log(`[PlaybookE] ${symbol} - Decline too small: ${declinePercent.toFixed(2)}% < 1.0%`);
+        return null;
+      }
+
+      if (declinePercent > 3.0) {
+        console.log(`[PlaybookE] ${symbol} - Decline too large: ${declinePercent.toFixed(2)}% > 3.0% (use Playbook D)`);
+        return null;
+      }
+
+      // RSI oversold confirmation
+      const closes = klines1h.map(k => parseFloat(k.close));
+      const rsi = this.calculateRSI(closes, 14);
+
+      if (rsi > 40) {
+        console.log(`[PlaybookE] ${symbol} - RSI not oversold: ${rsi.toFixed(2)} > 40`);
+        return null;
+      }
+
+      // Volume check - ensure decent volume
+      const recentVolumes = klines1h.slice(-20).map(k => parseFloat(k.volume));
+      const avgVolume = recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length;
+      const currentVolume = parseFloat(klines1h[klines1h.length - 1].volume);
+      const volumeRatio = currentVolume / avgVolume;
+
+      if (volumeRatio < 0.5) {
+        console.log(`[PlaybookE] ${symbol} - Volume too low: ${volumeRatio.toFixed(2)}x < 0.5x`);
+        return null;
+      }
+
+      // Calculate stop-loss (below recent swing low)
+      const recentLows = klines1h.slice(-10).map(k => parseFloat(k.low));
+      const swingLow = Math.min(...recentLows);
+      const stopDistance = atr * 1.5;
+      const stopPrice = swingLow - stopDistance;
+
+      // Calculate target (back to recent high)
+      const targetPrice = recentHigh;
+
+      console.log(`[PlaybookE] ${symbol} - SIGNAL: Buy the dip - ${declinePercent.toFixed(2)}% decline, RSI: ${rsi.toFixed(2)}, Entry: $${price.toFixed(2)}, Target: $${targetPrice.toFixed(2)}, Stop: $${stopPrice.toFixed(2)}`);
+
+      return {
+        symbol,
+        playbook: 'E',
+        action: 'BUY',
+        entryPrice: price,
+        stopPrice,
+        targetPrice,
+        reason: `Buy the dip: ${declinePercent.toFixed(2)}% decline with RSI ${rsi.toFixed(2)}`,
+      };
+    } catch (error) {
+      console.error(`[PlaybookE] Error checking ${market.symbol}:`, error);
       return null;
     }
   }

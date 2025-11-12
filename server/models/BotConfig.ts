@@ -66,6 +66,10 @@ export interface IBotConfig extends Document {
     enable: boolean;
     stop_atr_mult: number;
   };
+  playbook_E: {
+    enable: boolean;
+    stop_atr_mult: number;
+  };
   gridTrading?: {
     symbol: string;
     lowerBound: number;
@@ -345,6 +349,18 @@ const schema = new Schema<IBotConfig>({
       type: Number,
       required: true,
       default: 1.0,
+    },
+  },
+  playbook_E: {
+    enable: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
+    stop_atr_mult: {
+      type: Number,
+      required: true,
+      default: 1.5,
     },
   },
   gridTrading: {
