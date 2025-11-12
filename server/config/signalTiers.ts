@@ -26,12 +26,12 @@ export const TIERS = {
   TIER_3_AGGRESSIVE: {
     name: 'TIER_3_AGGRESSIVE',
     displayName: 'Tier 3: Aggressive',
-    impulsePct: 1.5,           // Minimum price move to trigger signal
-    positionPct: 0.01,         // 1% of equity per trade
-    maxPositions: 15,          // Maximum concurrent positions
-    minMlConf: 0.30,           // Minimum ML confidence (30%)
-    description: 'Aggressive tier for ranging markets with 1-2% daily moves',
-    useCase: 'Ranging markets, low volatility',
+    impulsePct: 0.5,           // Minimum price move to trigger signal (AGGRESSIVE: lowered from 1.5%)
+    positionPct: 0.02,         // 2% of equity per trade (AGGRESSIVE: increased from 1%)
+    maxPositions: 20,          // Maximum concurrent positions (AGGRESSIVE: increased from 15)
+    minMlConf: 0.30,           // Minimum ML confidence (30%) - KEPT AS REQUESTED
+    description: 'Aggressive tier for high-frequency trading with 0.5%+ moves',
+    useCase: 'All market conditions, high frequency, aggressive profit-taking',
   },
   
   /**
