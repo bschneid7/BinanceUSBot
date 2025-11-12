@@ -47,6 +47,7 @@ services:
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       ML_ENHANCED_SIGNALS: ${ML_ENHANCED_SIGNALS:-false}
       SIGNAL_TIER: ${SIGNAL_TIER:-TIER_3_AGGRESSIVE}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     ports:
       - "${APP_PORT:-3000}:3000"
     depends_on:

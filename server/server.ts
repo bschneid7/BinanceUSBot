@@ -4,6 +4,7 @@ import { Request, Response, NextFunction } from 'express';
 // Validate environment variables at boot (will throw if invalid)
 import { env } from './config/env';
 import exchangeFilters from './services/exchangeFilters';
+import { slackNotifier } from './services/slackNotifier';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import basicRoutes from './routes/index';
@@ -189,6 +190,25 @@ const server = app.listen(port, () => {
       exchangeFilters.startDailyRefresh();
     } catch (error: any) {
       console.error('[Server] Failed to load exchange filters:', error.message);
+    }
+  })();
+
+  // Send Slack startup notification
+  (async () => {
+    try {
+      // Send test notification first
+      await slackNotifier.sendTestNotification();
+      
+      // Then send startup notification
+      // Get current equity from BotState
+      const BotState = (await import('./models/BotState')).default;
+      const state = await BotState.findOne({});
+      const equity = state?.equity || 0;
+      
+      await slackNotifier.notifyStartup('v2.0.0', equity);
+      console.log('[Server] Slack notifications initialized');
+    } catch (error: any) {
+      console.error('[Server] Failed to send Slack notifications:', error.message);
     }
   })();
 

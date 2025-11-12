@@ -4,6 +4,7 @@ import binanceService from '../binanceService';
 import Order from '../../models/Order';
 import Position from '../../models/Position';
 import BotState from '../../models/BotState';
+import { slackNotifier } from '../slackNotifier';
 
 /**
  * User Data Stream Service
@@ -214,6 +215,31 @@ export class UserDataStreamService {
       if (order.status === 'FILLED') {
         order.filledAt = new Date(transactionTime);
         console.log(`[UserDataStream] Order FILLED: ${clientOrderId}`);
+
+        // Notify Slack about order fill
+        // Calculate P&L if this is a closing order
+        let pnl: number | undefined;
+        let pnlPercent: number | undefined;
+        if (order.positionId) {
+          try {
+            const position = await Position.findById(order.positionId);
+            if (position && position.unrealized_pnl !== undefined) {
+              pnl = position.unrealized_pnl;
+              pnlPercent = (pnl / (position.entry_price * position.quantity)) * 100;
+            }
+          } catch (err) {
+            console.error('[UserDataStream] Error calculating P&L for Slack notification:', err);
+          }
+        }
+
+        await slackNotifier.notifyOrderFilled(
+          order.symbol,
+          order.side as 'BUY' | 'SELL',
+          order.executedQty,
+          order.avgPrice,
+          pnl,
+          pnlPercent
+        );
       }
 
       // Mark as cancelled

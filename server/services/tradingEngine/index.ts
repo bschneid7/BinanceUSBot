@@ -19,6 +19,7 @@ import webSocketService from '../webSocketService';
 import gridTradingService from './gridTrading';
 import multiPairGridTradingService from './gridTradingMultiPair';
 import { portfolioRebalancer } from './portfolioRebalancer';
+import { slackNotifier } from '../slackNotifier';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -312,6 +313,19 @@ export class TradingEngine {
 
       logger.info(`[TradingEngine] Generated ${signals.length} signals`);
 
+      // Notify Slack about generated signals
+      if (signals.length > 0) {
+        for (const signal of signals) {
+          await slackNotifier.notifySignalGenerated(
+            signal.symbol,
+            signal.side,
+            signal.strategy || 'Unknown',
+            signal.confidence || 0,
+            signal.entryPrice
+          );
+        }
+      }
+
       // Step 6: Process signals
       // Process signals in parallel for better performance
       const results = await Promise.allSettled(
@@ -467,8 +481,22 @@ export class TradingEngine {
 
       if (!orderResult.success) {
         await signalGenerator.recordSignal(userId, signal, 'SKIPPED', orderResult.error);
+        await slackNotifier.notifyError(
+          'Order Execution Failed',
+          orderResult.error || 'Unknown error',
+          { symbol: signal.symbol, side: signal.side }
+        );
         return;
       }
+
+      // Notify Slack about order placement
+      await slackNotifier.notifyOrderPlaced(
+        signal.symbol,
+        signal.side,
+        quantity,
+        signal.entryPrice,
+        orderResult.orderId || 'Unknown'
+      );
 
       // Create position record
       const position = await positionManager.createPosition(
