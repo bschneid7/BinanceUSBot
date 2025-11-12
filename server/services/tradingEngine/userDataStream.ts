@@ -5,6 +5,7 @@ import Order from '../../models/Order';
 import Position from '../../models/Position';
 import BotState from '../../models/BotState';
 import { slackNotifier } from '../slackNotifier';
+import { metricsService } from '../metricsService';
 
 /**
  * User Data Stream Service
@@ -215,6 +216,9 @@ export class UserDataStreamService {
       if (order.status === 'FILLED') {
         order.filledAt = new Date(transactionTime);
         console.log(`[UserDataStream] Order FILLED: ${clientOrderId}`);
+
+        // Track metrics
+        metricsService.incrementCounter('trading_orders_filled', 1, { symbol: order.symbol, side: order.side });
 
         // Notify Slack about order fill
         // Calculate P&L if this is a closing order

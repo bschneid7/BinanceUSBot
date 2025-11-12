@@ -5,6 +5,7 @@ import { Request, Response, NextFunction } from 'express';
 import { env } from './config/env';
 import exchangeFilters from './services/exchangeFilters';
 import { slackNotifier } from './services/slackNotifier';
+import { metricsService } from './services/metricsService';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import basicRoutes from './routes/index';
@@ -139,6 +140,10 @@ app.get('/metrics', async (req: Request, res: Response) => {
     logger.error({ error }, 'Error generating metrics');
     res.status(500).send('Error generating metrics');
   }
+});
+// Trading Metrics Endpoint for Grafana
+app.get('/api/metrics', (req: Request, res: Response) => {
+  metricsService.metricsEndpoint(req, res);
 });
 // Health check endpoint
 app.get('/healthz', (req: Request, res: Response) => {

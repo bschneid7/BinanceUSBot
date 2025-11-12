@@ -1,0 +1,143 @@
+{
+  "dashboard": {
+    "title": "BinanceUSBot Trading Dashboard",
+    "tags": ["trading", "binance", "crypto"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Account Equity",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "trading_equity",
+            "legendFormat": "Equity (USD)",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "Equity"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Daily P&L",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "trading_pnl_daily",
+            "legendFormat": "Daily P&L",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "P&L"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Open Positions",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "trading_positions_open",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto"
+        }
+      },
+      {
+        "id": 4,
+        "title": "Win Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+        "targets": [
+          {
+            "expr": "trading_win_rate",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "unit": "percent",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Signals Generated",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(trading_signals_total[5m])",
+            "legendFormat": "Signals/min",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Orders Filled",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8},
+        "targets": [
+          {
+            "expr": "trading_orders_filled",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "API Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(api_requests_total[1m])",
+            "legendFormat": "Requests/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(api_requests_failed[1m])",
+            "legendFormat": "Failed/sec",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "WebSocket Status",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "websocket_connected",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "mappings": [
+            {"type": "value", "value": "1", "text": "Connected"},
+            {"type": "value", "value": "0", "text": "Disconnected"}
+          ]
+        }
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 16,
+    "version": 1
+  },
+  "overwrite": true
+}

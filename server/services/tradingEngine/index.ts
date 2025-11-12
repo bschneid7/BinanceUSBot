@@ -20,6 +20,7 @@ import gridTradingService from './gridTrading';
 import multiPairGridTradingService from './gridTradingMultiPair';
 import { portfolioRebalancer } from './portfolioRebalancer';
 import { slackNotifier } from '../slackNotifier';
+import { metricsService } from '../metricsService';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -313,6 +314,9 @@ export class TradingEngine {
 
       logger.info(`[TradingEngine] Generated ${signals.length} signals`);
 
+      // Track metrics
+      metricsService.incrementCounter('trading_signals_total', signals.length);
+
       // Notify Slack about generated signals
       if (signals.length > 0) {
         for (const signal of signals) {
@@ -481,6 +485,7 @@ export class TradingEngine {
 
       if (!orderResult.success) {
         await signalGenerator.recordSignal(userId, signal, 'SKIPPED', orderResult.error);
+        metricsService.incrementCounter('trading_orders_failed', 1, { symbol: signal.symbol });
         await slackNotifier.notifyError(
           'Order Execution Failed',
           orderResult.error || 'Unknown error',
@@ -488,6 +493,9 @@ export class TradingEngine {
         );
         return;
       }
+
+      // Track successful order
+      metricsService.incrementCounter('trading_orders_total', 1, { symbol: signal.symbol, side: signal.side });
 
       // Notify Slack about order placement
       await slackNotifier.notifyOrderPlaced(
@@ -661,6 +669,12 @@ export class TradingEngine {
       // Update equity
       state.equity = baseEquity + totalUnrealizedPnl;
       state.currentR = state.equity * config?.risk?.R_pct;
+
+      // Update metrics
+      metricsService.setGauge('trading_equity', state.equity);
+      metricsService.setGauge('trading_pnl_daily', state.dailyPnl || 0);
+      metricsService.setGauge('trading_pnl_weekly', state.weeklyPnl || 0);
+      metricsService.setGauge('trading_pnl_total', state.totalPnl || 0);
 
       await state.save();
     } catch (error) {
