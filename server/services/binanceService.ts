@@ -847,10 +847,34 @@ class BinanceService {
    */
   async createListenKey(): Promise<string> {
     try {
-      const response = await this.signedRequest('POST', '/api/v3/userDataStream', {});
-      return (response as any).listenKey;
+      // userDataStream endpoint uses API Key authentication ONLY
+      // No signature or timestamp required!
+      if (!this.isConfigured()) {
+        throw new Error('Binance API credentials not configured');
+      }
+
+      const response = await this.client.post(
+        '/api/v3/userDataStream',
+        null, // No body
+        {
+          headers: {
+            'X-MBX-APIKEY': this.apiKey,
+          },
+          // No params - API key only!
+        }
+      );
+
+      return response.data.listenKey;
     } catch (error) {
-      console.error('[BinanceService] Error creating listen key:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('[BinanceService] Error creating listen key:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message,
+        });
+      } else {
+        console.error('[BinanceService] Error creating listen key:', error);
+      }
       throw error;
     }
   }
@@ -860,7 +884,23 @@ class BinanceService {
    */
   async keepAliveListenKey(listenKey: string): Promise<void> {
     try {
-      await this.signedRequest('PUT', '/api/v3/userDataStream', { listenKey });
+      if (!this.isConfigured()) {
+        throw new Error('Binance API credentials not configured');
+      }
+
+      // userDataStream endpoint uses API Key authentication ONLY
+      await this.client.put(
+        '/api/v3/userDataStream',
+        null,
+        {
+          headers: {
+            'X-MBX-APIKEY': this.apiKey,
+          },
+          params: {
+            listenKey, // Only listenKey parameter
+          },
+        }
+      );
     } catch (error) {
       console.error('[BinanceService] Error keeping listen key alive:', error);
       throw error;
@@ -872,7 +912,22 @@ class BinanceService {
    */
   async deleteListenKey(listenKey: string): Promise<void> {
     try {
-      await this.signedRequest('DELETE', '/api/v3/userDataStream', { listenKey });
+      if (!this.isConfigured()) {
+        throw new Error('Binance API credentials not configured');
+      }
+
+      // userDataStream endpoint uses API Key authentication ONLY
+      await this.client.delete(
+        '/api/v3/userDataStream',
+        {
+          headers: {
+            'X-MBX-APIKEY': this.apiKey,
+          },
+          params: {
+            listenKey, // Only listenKey parameter
+          },
+        }
+      );
     } catch (error) {
       console.error('[BinanceService] Error deleting listen key:', error);
       throw error;
