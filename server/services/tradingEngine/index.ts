@@ -22,6 +22,8 @@ import { portfolioRebalancer } from './portfolioRebalancer';
 import { slackNotifier } from '../slackNotifier';
 import { metricsService } from '../metricsService';
 import { mlOrchestrator } from '../ml/mlOrchestrator';
+import { ppoAgent, TradingState } from '../ml/ppoAgent';
+import { shadowModeTracker } from '../ml/shadowModeTracker';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -354,6 +356,50 @@ export class TradingEngine {
             currentEquity,
             state?.recentWinRate
           );
+
+          // PPO Shadow Mode: Get PPO recommendation
+          try {
+            const ppoState: TradingState = {
+              currentPrice: symbolMarketData.price,
+              priceChange1h: symbolMarketData.priceChange1h || 0,
+              priceChange4h: symbolMarketData.priceChange4h || 0,
+              priceChange24h: symbolMarketData.priceChange24h || 0,
+              rsi: symbolMarketData.rsi || 50,
+              macd: symbolMarketData.macd || 0,
+              macdSignal: symbolMarketData.macdSignal || 0,
+              atr: symbolMarketData.atr || 0,
+              volume24h: symbolMarketData.volume24h || 0,
+              volumeChange: symbolMarketData.volumeChange || 0,
+              hasPosition: false, // TODO: Check actual position
+              positionSize: 0,
+              positionPnl: 0,
+              positionAge: 0,
+              equity: currentEquity,
+              openPositions: state?.openPositions || 0,
+              portfolioHeat: state?.portfolioHeat || 0,
+              volatility: symbolMarketData.volatility || 0,
+              trend: symbolMarketData.trend || 0,
+              correlation: 0
+            };
+
+            const ppoAction = await ppoAgent.getAction(signal.symbol, ppoState);
+            
+            // Record comparison in shadow mode
+            shadowModeTracker.recordComparison(
+              signal.symbol,
+              {
+                symbol: signal.symbol,
+                timestamp: new Date(),
+                state: ppoState,
+                action: ppoAction,
+                expectedReward: 0,
+                shadowMode: true
+              },
+              signal.action
+            );
+          } catch (error) {
+            logger.error(`[TradingEngine] PPO shadow mode failed for ${signal.symbol}:`, error);
+          }
 
           enhancedSignals.push({ original: signal, enhanced: mlSignal });
         } catch (error) {
