@@ -3,6 +3,7 @@ import express from 'express';
 import { Request, Response, NextFunction } from 'express';
 // Validate environment variables at boot (will throw if invalid)
 import { env } from './config/env';
+import exchangeFilters from './services/exchangeFilters';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import basicRoutes from './routes/index';
@@ -180,6 +181,16 @@ const server = app.listen(port, () => {
   
   // Initialize strategy drift detection (every 24 hours)
   strategyDriftDetector.startAutoDriftDetection(24);
+  
+  // Load exchange filters and start daily refresh
+  (async () => {
+    try {
+      await exchangeFilters.loadFilters();
+      exchangeFilters.startDailyRefresh();
+    } catch (error: any) {
+      console.error('[Server] Failed to load exchange filters:', error.message);
+    }
+  })();
 
   
   // Initialize daily P&L report cron job

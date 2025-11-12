@@ -1,6 +1,7 @@
 import logger from '../../utils/logger';
 import { Types } from 'mongoose';
 import binanceService from '../binanceService';
+import exchangeFilters from '../exchangeFilters';
 import Order from '../../models/Order';
 import Lot from '../../models/Lot';
 import BotConfig from '../../models/BotConfig';
@@ -265,6 +266,41 @@ export class ExecutionRouter {
           filledQuantity: order.filledQuantity,
           fees: order.fees,
         };
+      }
+
+      // Validate and round order parameters using exchange filters
+      if (params.type === 'LIMIT' && params.price) {
+        const validation = exchangeFilters.validateOrder(
+          params.symbol,
+          params.price,
+          params.quantity
+        );
+
+        if (!validation.valid) {
+          logger.error(
+            `[ExecutionRouter] Order validation failed for ${params.symbol}: ${validation.errors.join(', ')}`
+          );
+          
+          // Update order status to REJECTED
+          order.status = 'REJECTED';
+          order.rejectReason = validation.errors.join('; ');
+          await order.save();
+          
+          return {
+            success: false,
+            orderId: order._id as any,
+            error: `Order validation failed: ${validation.errors.join(', ')}`,
+          };
+        }
+
+        // Use rounded values for order
+        params.price = parseFloat(validation.roundedPrice);
+        params.quantity = parseFloat(validation.roundedQty);
+        
+        logger.info(
+          `[ExecutionRouter] Order validated and rounded: ${params.symbol} ` +
+          `price=${validation.roundedPrice} qty=${validation.roundedQty}`
+        );
       }
 
       // Place order on exchange
