@@ -224,6 +224,18 @@ const server = app.listen(port, () => {
   healthCheckService.start();
   console.log('[HealthCheck] Health monitoring started');
   
+  // Initialize critical services (stop loss monitor, etc.)
+  (async () => {
+    try {
+      const { initializeCriticalServices } = await import('./startup/initializeServices');
+      await initializeCriticalServices();
+      console.log('[Server] ✅ Critical services initialized');
+    } catch (error: any) {
+      console.error('[Server] ❌ CRITICAL: Failed to initialize services:', error.message);
+      // This is critical - consider shutting down if services fail
+    }
+  })();
+  
   // Load exchange filters and start daily refresh
   (async () => {
     try {

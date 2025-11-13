@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IBotConfig extends Document {
   userId: mongoose.Types.ObjectId;
+  paperTradingMode: boolean;
   botStatus: 'ACTIVE' | 'HALTED_DAILY' | 'HALTED_WEEKLY' | 'STOPPED';
   haltMetadata?: {
     reason?: string;
@@ -100,6 +101,11 @@ const schema = new Schema<IBotConfig>({
     required: true,
     unique: true,
     index: true,
+  },
+  paperTradingMode: {
+    type: Boolean,
+    default: false,
+    required: true,
   },
   botStatus: {
     type: String,

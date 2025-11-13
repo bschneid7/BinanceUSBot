@@ -46,6 +46,12 @@ export class ExecutionRouter {
         return { success: false, error: 'Bot configuration not found' };
       }
 
+      // Paper trading mode - simulate order without calling Binance API
+      if (config.paperTradingMode) {
+        logger.info(`[ExecutionRouter] 📝 PAPER TRADING MODE - Simulating order`);
+        return this.simulatePaperTrade(userId, signal, quantity, positionId);
+      }
+
       // Determine order type (LIMIT vs MARKET)
       let orderType: 'LIMIT' | 'MARKET' = 'LIMIT';
       let price = signal.entryPrice;
@@ -597,6 +603,81 @@ export class ExecutionRouter {
       logger.error(`[VWAPTiming] Error adjusting price for ${symbol}:`, error);
       // If error, return original price (fail-open)
       return entryPrice;
+    }
+  }
+
+  /**
+   * Simulate a paper trade without calling Binance API
+   */
+  private async simulatePaperTrade(
+    userId: Types.ObjectId,
+    signal: TradingSignal,
+    quantity: number,
+    positionId?: Types.ObjectId
+  ): Promise<OrderResult> {
+    try {
+      logger.info(`[PaperTrading] Simulating ${signal.action} order:`);
+      logger.info(`[PaperTrading]   Symbol: ${signal.symbol}`);
+      logger.info(`[PaperTrading]   Quantity: ${quantity}`);
+      logger.info(`[PaperTrading]   Price: $${signal.entryPrice.toFixed(2)}`);
+      logger.info(`[PaperTrading]   Stop: $${signal.stopPrice?.toFixed(2) || 'N/A'}`);
+      logger.info(`[PaperTrading]   Playbook: ${signal.playbook}`);
+
+      // Generate mock order ID
+      const mockOrderId = `PAPER_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Simulate small slippage (0.1%)
+      const slippageBps = 10;
+      const slippageFactor = signal.action === 'BUY' ? 1.001 : 0.999;
+      const fillPrice = signal.entryPrice * slippageFactor;
+
+      // Simulate fees (0.1% taker fee)
+      const fees = quantity * fillPrice * 0.001;
+
+      // Create paper order record
+      const order = await Order.create({
+        userId,
+        symbol: signal.symbol,
+        side: signal.action,
+        type: 'MARKET',
+        quantity,
+        price: fillPrice,
+        status: 'FILLED',
+        orderId: mockOrderId,
+        clientOrderId: `PAPER_${signal.symbol}_${Date.now()}`,
+        executedQty: quantity,
+        cummulativeQuoteQty: quantity * fillPrice,
+        fills: [{
+          price: fillPrice,
+          qty: quantity,
+          commission: fees,
+          commissionAsset: 'USD',
+        }],
+        transactTime: new Date(),
+        isPaperTrade: true, // Mark as paper trade
+      });
+
+      logger.info(`[PaperTrading] ✅ Paper order created: ${mockOrderId}`);
+      logger.info(`[PaperTrading]   Fill Price: $${fillPrice.toFixed(2)}`);
+      logger.info(`[PaperTrading]   Slippage: ${slippageBps}bps`);
+      logger.info(`[PaperTrading]   Fees: $${fees.toFixed(2)}`);
+
+      return {
+        success: true,
+        orderId: order._id as Types.ObjectId,
+        exchangeOrderId: mockOrderId,
+        fillPrice,
+        filledQuantity: quantity,
+        fees,
+        slippageBps,
+      };
+
+    } catch (error) {
+      logger.error('[PaperTrading] Error simulating paper trade:', error);
+      return {
+        success: false,
+        error: `Paper trade simulation failed: ${error}`,
+      };
     }
   }
 }

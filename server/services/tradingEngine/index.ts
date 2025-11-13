@@ -24,6 +24,8 @@ import { metricsService } from '../metricsService';
 import { mlOrchestrator } from '../ml/mlOrchestrator';
 import { ppoAgent, TradingState } from '../ml/ppoAgent';
 import { shadowModeTracker } from '../ml/shadowModeTracker';
+import stopLossMonitor from '../stopLossMonitor';
+import tradingCircuitBreaker from '../tradingCircuitBreaker';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -133,6 +135,17 @@ export class TradingEngine {
       } catch (error) {
         logger.error('[TradingEngine] Failed to start Portfolio Rebalancer:', error);
         logger.warn('[TradingEngine] Continuing without Portfolio Rebalancer');
+      }
+
+      // Start Independent Stop Loss Monitor (CRITICAL SAFETY FEATURE)
+      logger.info('[TradingEngine] Starting Independent Stop Loss Monitor...');
+      try {
+        stopLossMonitor.start();
+        logger.info('[TradingEngine] ✅ Stop Loss Monitor started - Positions protected');
+      } catch (error) {
+        logger.error('[TradingEngine] ❌ CRITICAL: Failed to start Stop Loss Monitor:', error);
+        // This is critical - consider not starting engine if monitor fails
+        throw new Error('Cannot start engine without stop loss monitor');
       }
 
       // Start self-scheduling scan loop (prevents overlaps)
@@ -291,6 +304,14 @@ export class TradingEngine {
           killSwitchResult.haltType!,
           killSwitchResult.reason!
         );
+        return;
+      }
+
+      // Step 2.1: Check trading circuit breaker
+      const circuitBreakerResult = await tradingCircuitBreaker.checkAll(userId);
+      if (circuitBreakerResult.triggered) {
+        logger.warn(`[TradingEngine] 🚨 Trading Circuit Breaker triggered: ${circuitBreakerResult.reason}`);
+        // Circuit breaker already triggered kill-switch, just return
         return;
       }
 
