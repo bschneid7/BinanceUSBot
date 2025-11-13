@@ -369,6 +369,20 @@ export class PositionManager {
         
         const closePrice = position.current_price || position.entry_price;
 
+        // Round quantity to exchange lot size requirements
+        let roundedQuantity = position.quantity;
+        try {
+          const exchangeFilters = (await import('../exchangeFilters')).default;
+          roundedQuantity = await exchangeFilters.roundQuantity(position.symbol, position.quantity);
+          
+          if (roundedQuantity !== position.quantity) {
+            console.log(`[PositionManager] Rounded quantity: ${position.quantity} -> ${roundedQuantity}`);
+          }
+        } catch (error) {
+          console.error(`[PositionManager] Failed to round quantity, using original:`, error);
+          // Continue with original quantity if rounding fails
+        }
+
         // 2. Place closing order (outside transaction - exchange operation)
         // Note: This happens BEFORE the transaction commits
         // If this fails, the transaction will rollback
@@ -382,7 +396,7 @@ export class PositionManager {
             stopPrice: 0,
             reason: `Close position - ${reason}`,
           },
-          position.quantity,
+          roundedQuantity,
           position._id as Types.ObjectId
         );
 

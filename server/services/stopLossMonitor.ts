@@ -168,8 +168,10 @@ class StopLossMonitor {
               `Closed by: Independent Stop Loss Monitor`
           });
 
-        } catch (closeError) {
-          logger.error(`[StopLossMonitor] ❌ Failed to close position ${position.symbol}:`, closeError);
+        } catch (closeError: any) {
+          const errorMessage = closeError?.message || closeError?.toString() || 'Unknown error';
+          logger.error(`[StopLossMonitor] ❌ Failed to close position ${position.symbol}:`, errorMessage);
+          logger.error(`[StopLossMonitor] Full error:`, closeError);
           
           // Send critical alert
           await slackNotifier.sendAlert({
