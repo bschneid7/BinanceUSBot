@@ -118,6 +118,42 @@ class ExchangeFilters {
   }
 
   /**
+   * Calculates the precision (number of decimal places) from a step size.
+   * Handles scientific notation and trailing zeros.
+   * @param stepSize The step size (typically a string from the API).
+   */
+  private getPrecision(stepSize: string | number): number {
+    const s = typeof stepSize === 'number' ? stepSize.toString() : stepSize;
+
+    // 1. Handle scientific notation (e.g., 1e-8)
+    if (s.toLowerCase().includes('e')) {
+      const match = s.toLowerCase().match(/e-(\d+)/);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+    }
+
+    // 2. Handle decimal notation
+    if (!s.includes('.')) {
+      return 0; // Integer step size
+    }
+    
+    // 3. Remove trailing zeros to find the effective precision
+    let trimmedS = s.replace(/(\.\d*?)0+$/, '$1');
+    
+    // If all decimals were zeros (e.g., "1.000" -> "1."), remove the trailing dot.
+    if (trimmedS.endsWith('.')) {
+      trimmedS = trimmedS.substring(0, trimmedS.length - 1);
+    }
+
+    if (!trimmedS.includes('.')) {
+      return 0;
+    }
+
+    return trimmedS.length - trimmedS.indexOf('.') - 1;
+  }
+
+  /**
    * Round price to correct tick size
    * Example: BTC tick size 0.01 -> 50000.123 becomes 50000.12
    */
@@ -141,8 +177,38 @@ class ExchangeFilters {
   }
 
   /**
+   * Truncates a quantity down to the specified step size.
+   * Uses Math.floor to ensure we never try to sell more than we have.
+   * This is the method that should be called by positionManager.
+   */
+  async roundQuantity(symbol: string, quantity: number): Promise<number> {
+    const filters = this.filters.get(symbol);
+    if (!filters || !filters.lotSizeFilter) {
+      console.warn(`[ExchangeFilters] No LOT_SIZE filter found for ${symbol}. Cannot guarantee compliance.`);
+      return quantity;
+    }
+
+    const stepSize = filters.lotSizeFilter.stepSize;
+    const precision = this.getPrecision(stepSize);
+
+    // Use Math.floor() to truncate the quantity. Crucial for SELL orders.
+    const factor = Math.pow(10, precision);
+    const truncatedQuantity = Math.floor(quantity * factor) / factor;
+
+    // Final formatting to mitigate floating point representation issues in JavaScript
+    const finalQuantity = parseFloat(truncatedQuantity.toFixed(precision));
+
+    if (quantity !== finalQuantity) {
+      console.log(`[ExchangeFilters] Truncated quantity for ${symbol}: ${quantity} -> ${finalQuantity} (stepSize: ${stepSize}, precision: ${precision})`);
+    }
+
+    return finalQuantity;
+  }
+
+  /**
    * Round quantity to correct step size
    * Example: BTC step size 0.00001 -> 0.0012345 becomes 0.00123
+   * @deprecated Use roundQuantity() instead for proper truncation
    */
   roundQtyToStep(symbol: string, qty: number): string {
     const filters = this.filters.get(symbol);

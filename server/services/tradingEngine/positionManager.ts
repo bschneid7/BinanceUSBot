@@ -376,12 +376,30 @@ export class PositionManager {
           roundedQuantity = await exchangeFilters.roundQuantity(position.symbol, position.quantity);
           
           if (roundedQuantity !== position.quantity) {
-            console.log(`[PositionManager] Rounded quantity: ${position.quantity} -> ${roundedQuantity}`);
+            console.log(`[PositionManager] Truncated quantity: ${position.quantity} -> ${roundedQuantity}`);
           }
         } catch (error) {
           console.error(`[PositionManager] Failed to round quantity, using original:`, error);
           console.error(`[PositionManager] Error details:`, error);
           // Continue with original quantity if rounding fails
+        }
+
+        // Check for dust (quantity below minQty after truncation)
+        const filters = exchangeFilters.getFilters(position.symbol);
+        if (filters && filters.lotSizeFilter) {
+          const minQty = parseFloat(filters.lotSizeFilter.minQty);
+          if (roundedQuantity < minQty) {
+            console.warn(`[PositionManager] Quantity ${roundedQuantity} is below minQty (${minQty}) for ${position.symbol}. Dust position detected.`);
+            
+            // Mark position as closed to prevent continuous retry
+            position.status = 'CLOSED';
+            position.closed_at = new Date();
+            position.close_reason = 'DUST';
+            await position.save({ session });
+            
+            console.log(`[PositionManager] Marked dust position ${positionId} as CLOSED`);
+            return; // Exit successfully without placing order
+          }
         }
 
         // 2. Place closing order (outside transaction - exchange operation)
