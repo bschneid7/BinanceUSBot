@@ -6,6 +6,7 @@ import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import binanceService from '../binanceService';
 import executionRouter from './executionRouter';
+import exchangeFilters from '../exchangeFilters';
 import { RISK_LIMITS } from './constants';
 
 export class PositionManager {
@@ -372,7 +373,6 @@ export class PositionManager {
         // Round quantity to exchange lot size requirements
         let roundedQuantity = position.quantity;
         try {
-          const exchangeFilters = (await import('../exchangeFilters')).default;
           roundedQuantity = await exchangeFilters.roundQuantity(position.symbol, position.quantity);
           
           if (roundedQuantity !== position.quantity) {
@@ -380,6 +380,7 @@ export class PositionManager {
           }
         } catch (error) {
           console.error(`[PositionManager] Failed to round quantity, using original:`, error);
+          console.error(`[PositionManager] Error details:`, error);
           // Continue with original quantity if rounding fails
         }
 
