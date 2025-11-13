@@ -156,6 +156,7 @@ class ExchangeFilters {
   /**
    * Round price to correct tick size
    * Example: BTC tick size 0.01 -> 50000.123 becomes 50000.12
+   * Now uses getPrecision() for proper handling of all tickSize formats
    */
   roundPriceToTick(symbol: string, price: number): string {
     const filters = this.filters.get(symbol);
@@ -163,17 +164,14 @@ class ExchangeFilters {
       throw new Error(`No price filter found for ${symbol}`);
     }
 
-    const tickSize = parseFloat(filters.priceFilter.tickSize);
-    const rounded = Math.floor(price / tickSize) * tickSize;
+    const tickSize = filters.priceFilter.tickSize;
+    const precision = this.getPrecision(tickSize);
 
-    // Determine precision from tickSize
-    // e.g., 0.01 -> 2 decimals, 0.00001 -> 5 decimals
-    const tickSizeStr = filters.priceFilter.tickSize;
-    const precision = tickSizeStr.includes('.')
-      ? tickSizeStr.split('.')[1].length
-      : 0;
+    // Use Math.floor() for consistency
+    const factor = Math.pow(10, precision);
+    const truncated = Math.floor(price * factor) / factor;
 
-    return rounded.toFixed(precision);
+    return parseFloat(truncated.toFixed(precision)).toString();
   }
 
   /**
@@ -208,7 +206,7 @@ class ExchangeFilters {
   /**
    * Round quantity to correct step size
    * Example: BTC step size 0.00001 -> 0.0012345 becomes 0.00123
-   * @deprecated Use roundQuantity() instead for proper truncation
+   * Now uses getPrecision() for proper handling of all stepSize formats
    */
   roundQtyToStep(symbol: string, qty: number): string {
     const filters = this.filters.get(symbol);
@@ -216,16 +214,14 @@ class ExchangeFilters {
       throw new Error(`No lot size filter found for ${symbol}`);
     }
 
-    const stepSize = parseFloat(filters.lotSizeFilter.stepSize);
-    const rounded = Math.floor(qty / stepSize) * stepSize;
+    const stepSize = filters.lotSizeFilter.stepSize;
+    const precision = this.getPrecision(stepSize);
 
-    // Determine precision from stepSize
-    const stepSizeStr = filters.lotSizeFilter.stepSize;
-    const precision = stepSizeStr.includes('.')
-      ? stepSizeStr.split('.')[1].length
-      : 0;
+    // Use Math.floor() to truncate (same logic as roundQuantity)
+    const factor = Math.pow(10, precision);
+    const truncated = Math.floor(qty * factor) / factor;
 
-    return rounded.toFixed(precision);
+    return parseFloat(truncated.toFixed(precision)).toString();
   }
 
   /**
