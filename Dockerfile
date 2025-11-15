@@ -15,7 +15,12 @@ RUN apt-get update && apt-get install -y \
 COPY server/package*.json ./server/
 
 # Install server dependencies
-RUN cd server && npm install --legacy-peer-deps
+# Skip TensorFlow binary download during npm install to avoid tar extraction errors
+ENV TFJS_NODE_SKIP_DOWNLOAD=1
+RUN cd server && npm install --legacy-peer-deps --ignore-scripts
+
+# Manually install TensorFlow binaries after npm install
+RUN cd server && npm rebuild @tensorflow/tfjs-node --build-from-source=false || true
 
 # Copy all application code
 ARG CACHEBUST=1
