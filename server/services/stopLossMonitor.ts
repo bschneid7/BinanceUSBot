@@ -53,6 +53,71 @@ class StopLossMonitor {
   }
 
   /**
+   * Close position with retry logic and exponential backoff
+   */
+  private async closePositionWithRetry(position: any, currentPrice: number): Promise<void> {
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await positionManager.closePosition(
+          position._id as Types.ObjectId,
+          'STOP_LOSS'
+        );
+        
+        this.stopsTriggered++;
+        logger.info(`[StopLossMonitor] ✅ Position closed: ${position.symbol}`);
+        
+        // Send success alert
+        await slackNotifier.sendAlert({
+          type: 'STOP_LOSS',
+          message: `🚨 Stop Loss Triggered\n\n` +
+            `Symbol: ${position.symbol}\n` +
+            `Side: ${position.side}\n` +
+            `Entry: $${position.entry_price.toFixed(2)}\n` +
+            `Stop: $${position.stop_price.toFixed(2)}\n` +
+            `Exit: $${currentPrice.toFixed(2)}\n` +
+            `P&L: $${position.unrealized_pnl?.toFixed(2) || 'N/A'}\n` +
+            `Attempt: ${attempt}/${maxRetries}\n` +
+            `Closed by: Independent Stop Loss Monitor`
+        });
+        
+        return; // Success!
+        
+      } catch (closeError: any) {
+        const errorMessage = closeError?.message || String(closeError);
+        
+        // Check if it's a race condition (position already closed)
+        if (errorMessage.includes('not found') || errorMessage.includes('already closing')) {
+          logger.info(`[StopLossMonitor] Position ${position.symbol} already closed by another process`);
+          return; // Not an error
+        }
+        
+        // If last attempt, send critical alert
+        if (attempt === maxRetries) {
+          logger.error(`[StopLossMonitor] ❌ Failed to close position ${position.symbol} after ${maxRetries} attempts`);
+          
+          await slackNotifier.sendAlert({
+            type: 'CRITICAL',
+            message: `🚨 CRITICAL: Failed to close position ${position.symbol} at stop loss after ${maxRetries} attempts!\n` +
+              `Current: $${currentPrice.toFixed(2)}, Stop: $${position.stop_price.toFixed(2)}\n` +
+              `Error: ${errorMessage}\n` +
+              `MANUAL INTERVENTION REQUIRED`
+          });
+          
+          throw closeError; // Re-throw on final attempt
+        }
+        
+        // Exponential backoff
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        logger.warn(`[StopLossMonitor] Attempt ${attempt}/${maxRetries} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  /**
    * Stop the monitor
    */
   stop(): void {
@@ -144,44 +209,8 @@ class StopLossMonitor {
         logger.warn(`[StopLossMonitor]   Distance: ${distancePct.toFixed(2)}% ${position.side === 'LONG' ? 'below' : 'above'} stop`);
         logger.warn(`[StopLossMonitor]   Unrealized P&L: $${position.unrealized_pnl?.toFixed(2) || 'N/A'}`);
 
-        // Close the position
-        try {
-          await positionManager.closePosition(
-            position._id as Types.ObjectId,
-            'STOP_LOSS'
-          );
-
-          this.stopsTriggered++;
-
-          logger.info(`[StopLossMonitor] ✅ Position closed: ${position.symbol}`);
-
-          // Send Slack alert
-          await slackNotifier.sendAlert({
-            type: 'STOP_LOSS',
-            message: `🚨 Stop Loss Triggered\n\n` +
-              `Symbol: ${position.symbol}\n` +
-              `Side: ${position.side}\n` +
-              `Entry: $${position.entry_price.toFixed(2)}\n` +
-              `Stop: $${position.stop_price.toFixed(2)}\n` +
-              `Exit: $${currentPrice.toFixed(2)}\n` +
-              `P&L: $${position.unrealized_pnl?.toFixed(2) || 'N/A'}\n` +
-              `Closed by: Independent Stop Loss Monitor`
-          });
-
-        } catch (closeError: any) {
-          const errorMessage = closeError?.message || closeError?.toString() || 'Unknown error';
-          logger.error(`[StopLossMonitor] ❌ Failed to close position ${position.symbol}:`, errorMessage);
-          logger.error(`[StopLossMonitor] Full error:`, closeError);
-          
-          // Send critical alert
-          await slackNotifier.sendAlert({
-            type: 'CRITICAL',
-            message: `🚨 CRITICAL: Failed to close position ${position.symbol} at stop loss!\n` +
-              `Current: $${currentPrice.toFixed(2)}, Stop: $${position.stop_price.toFixed(2)}\n` +
-              `Error: ${closeError}\n` +
-              `MANUAL INTERVENTION REQUIRED`
-          });
-        }
+        // Close the position with retry logic
+        await this.closePositionWithRetry(position, currentPrice);
       } else {
         // Log positions approaching stop loss (within 5%)
         const distanceToStop = position.side === 'LONG'

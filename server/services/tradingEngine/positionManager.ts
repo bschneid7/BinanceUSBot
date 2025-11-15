@@ -354,12 +354,33 @@ export class PositionManager {
     positionId: Types.ObjectId,
     reason: 'STOP_LOSS' | 'TARGET' | 'MANUAL' | 'KILL_SWITCH' | 'TIME_STOP'
   ): Promise<void> {
+    let orderPlaced = false;
+    let orderId: Types.ObjectId | undefined;
+    let originalStatus: string | undefined;
+
     try {
-      // 1. Get position
-      const position = await Position.findById(positionId);
-      if (!position || position.status !== 'OPEN') {
-        throw new Error(`Position ${positionId} not found or already closed`);
+      // RACE CONDITION PROTECTION: Atomic status update
+      // Only one process can successfully update status from OPEN to CLOSING
+      const position = await Position.findOneAndUpdate(
+        { 
+          _id: positionId, 
+          status: 'OPEN' // Only update if still OPEN
+        },
+        { 
+          $set: { 
+            status: 'CLOSING', // Prevents duplicate close attempts
+            closingStartedAt: new Date()
+          }
+        },
+        { new: true }
+      );
+
+      if (!position) {
+        console.log(`[PositionManager] Position ${positionId} not found or already closing/closed`);
+        return; // Already being closed by another process
       }
+
+      originalStatus = 'OPEN'; // Save for rollback
 
       console.log(`[PositionManager] Closing position ${positionId} - Reason: ${reason}`);
       
@@ -429,6 +450,9 @@ export class PositionManager {
         throw new Error(`Failed to execute closing order: ${result.error}`);
       }
 
+      orderPlaced = true;
+      orderId = result.orderId;
+
       // 3. Calculate realized PnL
       const priceDiff = position.side === 'LONG'
         ? closePrice - position.entry_price
@@ -489,7 +513,31 @@ export class PositionManager {
       console.log(`[PositionManager] ✅ Position ${positionId} closed: ${realizedPnl.toFixed(2)} USD (${realizedR.toFixed(2)}R)`);
       
     } catch (error) {
-      console.error(`[PositionManager] ❌ Failed to close position ${positionId}:`, error);
+      console.error(`[PositionManager] ❌ Error closing position ${positionId}:`, error);
+      
+      // ROLLBACK: Revert position status if order wasn't placed
+      if (!orderPlaced && originalStatus) {
+        try {
+          await Position.findByIdAndUpdate(positionId, {
+            status: originalStatus,
+            $unset: { closingStartedAt: 1 }
+          });
+          console.log(`[PositionManager] Rolled back position ${positionId} status to ${originalStatus}`);
+        } catch (rollbackError) {
+          console.error(`[PositionManager] Failed to rollback position status:`, rollbackError);
+        }
+      }
+      
+      // If order was placed but subsequent operations failed, we need manual intervention
+      if (orderPlaced) {
+        console.error(`[PositionManager] 🚨 CRITICAL: Order placed but position update failed for ${positionId}`);
+        console.error(`[PositionManager] Order ID: ${orderId}`);
+        console.error(`[PositionManager] MANUAL INTERVENTION REQUIRED`);
+        
+        // Send critical alert (implement your alert system here)
+        // await alerting.sendCriticalAlert({ ... });
+      }
+      
       throw error;
     }
   }
