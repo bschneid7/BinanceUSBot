@@ -313,102 +313,117 @@ export class PositionManager {
    * Close a position
    */
   async closePosition(
-    positionId: Types.ObjectId,
-    reason: 'STOP_LOSS' | 'TARGET' | 'MANUAL' | 'KILL_SWITCH' | 'TIME_STOP'
+    positionId: string,
+    reason: 'STOP_LOSS' | 'TARGET' | 'TIME_STOP' | 'MANUAL'
   ): Promise<void> {
+    console.log('🔍 ========== CLOSE POSITION FLOW START ==========');
+    console.log('🔍 Position ID:', positionId);
+    console.log('🔍 Close Reason:', reason);
+
+    const position = await Position.findById(positionId);
+    if (!position) {
+      console.error('❌ Position not found:', positionId);
+      throw new Error('Position not found');
+    }
+
+    console.log('🔍 Position Details:', {
+      symbol: position.symbol,
+      quantity: position.quantity,
+      entryPrice: position.entryPrice,
+      currentPrice: position.currentPrice,
+      status: position.status
+    });
+
     try {
-      const position = await Position.findById(positionId);
-      if (!position || position.status !== 'OPEN') {
-        return;
+      // Get current price
+      const currentPrice = await this.getCurrentPrice(position.symbol);
+      console.log('🔍 Current Market Price:', currentPrice);
+
+      // Calculate P&L
+      const pnl = (currentPrice - position.entryPrice) * position.quantity;
+      const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
+
+      console.log('🔍 P&L Calculation:', {
+        pnl: pnl.toFixed(2),
+        pnlPercent: pnlPercent.toFixed(2) + '%'
+      });
+
+      // Get exchange filters for the symbol
+      console.log('🔍 Loading exchange filters for', position.symbol);
+      await exchangeFilters.loadFilters();
+      
+      const filters = exchangeFilters.getFilters(position.symbol);
+      console.log('🔍 Exchange Filters:', {
+        lotSize: filters?.lotSizeFilter,
+        priceFilter: filters?.priceFilter
+      });
+
+      // Round quantity using enhanced safeTruncate
+      console.log('🔍 Original Quantity:', position.quantity);
+      const roundedQty = exchangeFilters.roundQuantity(position.symbol, position.quantity);
+      console.log('🔍 Rounded Quantity:', roundedQty);
+
+      // Validate the quantity before sending
+      const isValid = exchangeFilters.validateLotSize(position.symbol, roundedQty);
+      console.log('🔍 Quantity Validation:', isValid ? '✅ VALID' : '❌ INVALID');
+
+      if (!isValid) {
+        console.error('❌ Quantity validation failed before order submission');
+        throw new Error(`Invalid quantity ${roundedQty} for ${position.symbol}`);
       }
 
-      console.log(`[PositionManager] Closing position ${positionId} - Reason: ${reason}`);
+      // Place sell order
+      console.log('🔍 Placing SELL order:', {
+        symbol: position.symbol,
+        quantity: roundedQty,
+        type: 'MARKET'
+      });
 
-      const closePrice = position.current_price || position.entry_price;
+      const order = await this.binance.order({
+        symbol: position.symbol,
+        side: 'SELL',
+        type: 'MARKET',
+        quantity: roundedQty.toString(),
+      });
 
-      // Place closing order
-      const result = await executionRouter.executeSignal(
-        position.userId,
-        {
-          symbol: position.symbol,
-          playbook: position.playbook,
-          action: position.side === 'LONG' ? 'SELL' : 'BUY',
-          entryPrice: closePrice,
-          stopPrice: 0,
-          reason: `Close position - ${reason}`,
-        },
-        position.quantity,
-        position._id as Types.ObjectId
-      );
-
-      if (!result.success) {
-        console.error(`[PositionManager] Failed to close position: ${result.error}`);
-        return;
-      }
-
-      // Calculate realized PnL
-      const priceDiff = position.side === 'LONG'
-        ? closePrice - position.entry_price
-        : position.entry_price - closePrice;
-
-      const realizedPnl = priceDiff * position.quantity - (result.fees || 0);
-
-      // Calculate realized R
-      let state = null;
-      let currentR = 42; // Default fallback
-      try {
-        state = await BotState.findOne({ userId: position.userId });
-        currentR = state?.currentR || 42;
-      } catch (error) {
-        console.warn(`[PositionManager] Could not fetch BotState, using default R value: ${error}`);
-      }
-      const realizedR = currentR > 0 ? realizedPnl / currentR : 0;
+      console.log('✅ Order executed successfully:', {
+        orderId: order.orderId,
+        executedQty: order.executedQty,
+        status: order.status
+      });
 
       // Update position
       position.status = 'CLOSED';
-      position.closed_at = new Date();
-      position.realized_pnl = Math.round(realizedPnl * 100) / 100;
-      position.realized_r = Math.round(realizedR * 100) / 100;
-      position.fees_paid = (position.fees_paid || 0) + (result.fees || 0);
+      position.exitPrice = currentPrice;
+      position.exitTime = new Date();
+      position.pnl = pnl;
+      position.pnlPercent = pnlPercent;
+      position.closeReason = reason;
       await position.save();
 
-      // Create trade record
-      await Trade.create({
-        userId: position.userId,
+      console.log('✅ Position updated and closed successfully');
+      console.log('🔍 ========== CLOSE POSITION FLOW END ==========');
+
+      // Emit event
+      eventEmitter.emit('positionClosed', {
+        positionId: position._id,
         symbol: position.symbol,
-        side: position.side,
-        playbook: position.playbook,
-        entry_price: position.entry_price,
-        exit_price: closePrice,
-        quantity: position.quantity,
-        pnl_usd: realizedPnl,
-        pnl_r: realizedR,
-        fees: position.fees_paid,
-        date: position.closed_at,
-        outcome: realizedPnl > 0 ? 'WIN' : realizedPnl < 0 ? 'LOSS' : 'BREAKEVEN',
-        notes: `Closed via ${reason}`,
+        pnl,
+        pnlPercent,
+        reason,
       });
-
-      // Update bot state PnL
-      if (state) {
-        state.dailyPnl += realizedPnl;
-        state.dailyPnlR += realizedR;
-        state.weeklyPnl += realizedPnl;
-        state.weeklyPnlR += realizedR;
-        await state.save();
-      }
-
-      console.log(`[PositionManager] Position closed: ${position.symbol} - PnL: $${realizedPnl.toFixed(2)} (${realizedR.toFixed(2)}R)`);
     } catch (error) {
-      console.error(`[PositionManager] Error closing position ${positionId}:`, error);
+      console.error('❌ ========== CLOSE POSITION ERROR ==========');
+      console.error('❌ Error closing position:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      console.error('❌ ========== ERROR END ==========');
       throw error;
     }
   }
 
-  /**
-   * Update all open positions with current prices
-   */
-  async updateAllPositions(userId: Types.ObjectId): Promise<void> {
     try {
       const openPositions = await Position.find({ userId, status: 'OPEN' });
       
@@ -427,135 +442,3 @@ export class PositionManager {
             return { position, ticker: null, success: false };
           })
       );
-
-      const tickerResults = await Promise.all(tickerPromises);
-
-      // Update positions in parallel
-      const updatePromises = tickerResults.map(async ({ position, ticker, success }) => {
-        if (!success || !ticker) {
-          return;
-        }
-
-        try {
-          // Validate ticker data
-          if (!ticker.lastPrice || isNaN(parseFloat(ticker.lastPrice))) {
-            console.warn(`[PositionManager] Invalid price data for ${position.symbol}:`, ticker.lastPrice);
-            return;
-          }
-
-          const currentPrice = parseFloat(ticker.lastPrice);
-          
-          // Sanity check on price
-          if (currentPrice <= 0 || currentPrice > 1000000) {
-            console.warn(`[PositionManager] Unreasonable price for ${position.symbol}: $${currentPrice}`);
-            return;
-          }
-
-          await this.updatePosition(position._id as Types.ObjectId, currentPrice);
-          await this.managePosition(position._id as Types.ObjectId);
-        } catch (error) {
-          console.error(`[PositionManager] Error updating position ${position._id}:`, error);
-        }
-      });
-
-      await Promise.all(updatePromises);
-      console.log(`[PositionManager] Position updates complete`);
-    } catch (error) {
-      console.error('[PositionManager] Error updating all positions:', error);
-    }
-  }
-
-  /**
-   * Check if a new position would violate correlation risk limits
-   * Phase 3: Correlation-Based Risk Management
-   * @param userId User ID
-   * @param symbol Symbol to check
-   * @returns Object with canOpen flag and reason
-   */
-  async checkCorrelationRisk(
-    userId: Types.ObjectId,
-    symbol: string
-  ): Promise<{ canOpen: boolean; reason?: string; correlatedSymbols?: string[] }> {
-    try {
-      // Import CDD helper
-      const getCDDHelper = (await import('../cddDataHelper')).default;
-      const cddHelper = getCDDHelper();
-
-      // Get all open positions for this user
-      const openPositions = await Position.find({
-        userId,
-        status: 'OPEN',
-      });
-
-      if (openPositions.length === 0) {
-        return { canOpen: true };
-      }
-
-      // Correlation thresholds
-      const HIGH_CORRELATION = 0.7;
-      const MODERATE_CORRELATION = 0.5;
-      const MAX_HIGH_CORR_POSITIONS = 2;
-      const MAX_MODERATE_CORR_POSITIONS = 3;
-
-      const highlyCorrelated: string[] = [];
-      const moderatelyCorrelated: string[] = [];
-
-      // Check correlation with each open position
-      for (const position of openPositions) {
-        const correlation = await cddHelper.getCorrelation(symbol, position.symbol);
-
-        if (correlation === null) {
-          // No correlation data available, allow position
-          continue;
-        }
-
-        const absCorr = Math.abs(correlation);
-
-        if (absCorr >= HIGH_CORRELATION) {
-          highlyCorrelated.push(position.symbol);
-        } else if (absCorr >= MODERATE_CORRELATION) {
-          moderatelyCorrelated.push(position.symbol);
-        }
-      }
-
-      // Check if we exceed high correlation limit
-      if (highlyCorrelated.length >= MAX_HIGH_CORR_POSITIONS) {
-        console.log(
-          `[PositionManager] Correlation risk: ${symbol} highly correlated (>0.7) with ${highlyCorrelated.length} positions: ${highlyCorrelated.join(', ')}`
-        );
-        return {
-          canOpen: false,
-          reason: `Too many highly correlated positions (${highlyCorrelated.length}/${MAX_HIGH_CORR_POSITIONS})`,
-          correlatedSymbols: highlyCorrelated,
-        };
-      }
-
-      // Check if we exceed moderate correlation limit
-      if (moderatelyCorrelated.length >= MAX_MODERATE_CORR_POSITIONS) {
-        console.log(
-          `[PositionManager] Correlation risk: ${symbol} moderately correlated (>0.5) with ${moderatelyCorrelated.length} positions: ${moderatelyCorrelated.join(', ')}`
-        );
-        return {
-          canOpen: false,
-          reason: `Too many moderately correlated positions (${moderatelyCorrelated.length}/${MAX_MODERATE_CORR_POSITIONS})`,
-          correlatedSymbols: moderatelyCorrelated,
-        };
-      }
-
-      // Log correlation info if any correlations found
-      if (highlyCorrelated.length > 0 || moderatelyCorrelated.length > 0) {
-        console.log(
-          `[PositionManager] Correlation check passed for ${symbol}: ${highlyCorrelated.length} high, ${moderatelyCorrelated.length} moderate`
-        );
-      }
-
-      return { canOpen: true };
-    } catch (error) {
-      console.error(`[PositionManager] Error checking correlation risk:`, error);
-      // On error, allow position to avoid blocking trades
-      return { canOpen: true };
-    }
-  }
-}
-
-export default new PositionManager();

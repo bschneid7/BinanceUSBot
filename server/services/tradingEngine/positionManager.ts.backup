@@ -354,133 +354,148 @@ export class PositionManager {
     positionId: Types.ObjectId,
     reason: 'STOP_LOSS' | 'TARGET' | 'MANUAL' | 'KILL_SWITCH' | 'TIME_STOP'
   ): Promise<void> {
+    // Start MongoDB session for transaction
+    const session = await mongoose.startSession();
+    
     try {
-      // 1. Get position
-      const position = await Position.findById(positionId);
-      if (!position || position.status !== 'OPEN') {
-        throw new Error(`Position ${positionId} not found or already closed`);
-      }
+      // Execute all operations in a transaction
+      await session.withTransaction(async () => {
+        // 1. Get position (with session)
+        const position = await Position.findById(positionId).session(session);
+        if (!position || position.status !== 'OPEN') {
+          throw new Error(`Position ${positionId} not found or already closed`);
+        }
 
-      console.log(`[PositionManager] Closing position ${positionId} - Reason: ${reason}`);
-      
-      const closePrice = position.current_price || position.entry_price;
-
-      // Round quantity to exchange lot size requirements
-      let roundedQuantity = position.quantity;
-      try {
-        roundedQuantity = await exchangeFilters.roundQuantity(position.symbol, position.quantity);
+        console.log(`[PositionManager] Closing position ${positionId} - Reason: ${reason}`);
         
-        if (roundedQuantity !== position.quantity) {
-          console.log(`[PositionManager] Truncated quantity: ${position.quantity} -> ${roundedQuantity}`);
-        }
-      } catch (error) {
-        console.error(`[PositionManager] Failed to round quantity, using original:`, error);
-        console.error(`[PositionManager] Error details:`, error);
-        // Continue with original quantity if rounding fails
-      }
+        const closePrice = position.current_price || position.entry_price;
 
-      // Check for dust (quantity below minQty after truncation)
-      const filters = exchangeFilters.getFilters(position.symbol);
-      if (filters && filters.lotSizeFilter) {
-        const minQty = parseFloat(filters.lotSizeFilter.minQty);
-        if (roundedQuantity < minQty) {
-          console.warn(`[PositionManager] Quantity ${roundedQuantity} is below minQty (${minQty}) for ${position.symbol}. Dust position detected.`);
+        // Round quantity to exchange lot size requirements
+        let roundedQuantity = position.quantity;
+        try {
+          roundedQuantity = await exchangeFilters.roundQuantity(position.symbol, position.quantity);
           
-          // Mark position as closed to prevent continuous retry
-          position.status = 'CLOSED';
-          position.closed_at = new Date();
-          position.close_reason = 'DUST';
-          await position.save();
-          
-          console.log(`[PositionManager] Marked dust position ${positionId} as CLOSED`);
-          return; // Exit successfully without placing order
+          if (roundedQuantity !== position.quantity) {
+            console.log(`[PositionManager] Truncated quantity: ${position.quantity} -> ${roundedQuantity}`);
+          }
+        } catch (error) {
+          console.error(`[PositionManager] Failed to round quantity, using original:`, error);
+          console.error(`[PositionManager] Error details:`, error);
+          // Continue with original quantity if rounding fails
         }
-      }
 
-      // 2. Place closing order
-      const result = await executionRouter.executeSignal(
-        position.userId,
-        {
+        // Check for dust (quantity below minQty after truncation)
+        const filters = exchangeFilters.getFilters(position.symbol);
+        if (filters && filters.lotSizeFilter) {
+          const minQty = parseFloat(filters.lotSizeFilter.minQty);
+          if (roundedQuantity < minQty) {
+            console.warn(`[PositionManager] Quantity ${roundedQuantity} is below minQty (${minQty}) for ${position.symbol}. Dust position detected.`);
+            
+            // Mark position as closed to prevent continuous retry
+            position.status = 'CLOSED';
+            position.closed_at = new Date();
+            position.close_reason = 'DUST';
+            await position.save({ session });
+            
+            console.log(`[PositionManager] Marked dust position ${positionId} as CLOSED`);
+            return; // Exit successfully without placing order
+          }
+        }
+
+        // 2. Place closing order (outside transaction - exchange operation)
+        // Note: This happens BEFORE the transaction commits
+        // If this fails, the transaction will rollback
+        const result = await executionRouter.executeSignal(
+          position.userId,
+          {
+            symbol: position.symbol,
+            playbook: position.playbook,
+            action: position.side === 'LONG' ? 'SELL' : 'BUY',
+            entryPrice: closePrice,
+            stopPrice: 0,
+            reason: `Close position - ${reason}`,
+          },
+          roundedQuantity,
+          position._id as Types.ObjectId
+        );
+
+        if (!result.success) {
+          throw new Error(`Failed to execute closing order: ${result.error}`);
+        }
+
+        // 3. Calculate realized PnL
+        const priceDiff = position.side === 'LONG'
+          ? closePrice - position.entry_price
+          : position.entry_price - closePrice;
+        const realizedPnl = priceDiff * position.quantity - (result.fees || 0);
+
+        // 4. Get BotState for R calculation
+        let state = await BotState.findOne({ userId: position.userId }).session(session);
+        
+        // Calculate R from equity and risk percentage (0.6%)
+        let currentR: number;
+        if (state && state.currentR && state.currentR > 0) {
+          currentR = state.currentR;
+        } else if (state && state.equity && state.equity > 0) {
+          // Calculate R as 0.6% of equity
+          currentR = state.equity * 0.006;
+          console.log(`[PositionManager] Calculated R from equity: $${currentR.toFixed(2)}`);
+        } else {
+          throw new Error('BotState not properly initialized - cannot calculate R value');
+        }
+        
+        const realizedR = currentR > 0 ? realizedPnl / currentR : 0;
+
+        // 5. Update position (atomic - part of transaction)
+        position.status = 'CLOSED';
+        position.closed_at = new Date();
+        position.realized_pnl = Math.round(realizedPnl * 100) / 100;
+        position.realized_r = Math.round(realizedR * 100) / 100;
+        position.fees_paid = (position.fees_paid || 0) + (result.fees || 0);
+        await position.save({ session });
+
+        // 6. Create trade record (atomic - part of transaction)
+        await Trade.create([{
+          userId: position.userId,
           symbol: position.symbol,
+          side: position.side,
           playbook: position.playbook,
-          action: position.side === 'LONG' ? 'SELL' : 'BUY',
-          entryPrice: closePrice,
-          stopPrice: 0,
-          reason: `Close position - ${reason}`,
-        },
-        roundedQuantity,
-        position._id as Types.ObjectId
-      );
+          entry_price: position.entry_price,
+          exit_price: closePrice,
+          quantity: position.quantity,
+          pnl_usd: realizedPnl,
+          pnl_r: realizedR,
+          fees: position.fees_paid,
+          date: position.closed_at,
+          outcome: realizedPnl > 0 ? 'WIN' : realizedPnl < 0 ? 'LOSS' : 'BREAKEVEN',
+          notes: `Closed via ${reason}`,
+        }], { session });
 
-      if (!result.success) {
-        throw new Error(`Failed to execute closing order: ${result.error}`);
-      }
+        // 7. Update bot state PnL (atomic - part of transaction)
+        if (state) {
+          state.dailyPnl += realizedPnl;
+          state.dailyPnlR += realizedR;
+          state.weeklyPnl += realizedPnl;
+          state.weeklyPnlR += realizedR;
+          await state.save({ session });
+        }
 
-      // 3. Calculate realized PnL
-      const priceDiff = position.side === 'LONG'
-        ? closePrice - position.entry_price
-        : position.entry_price - closePrice;
-      const realizedPnl = priceDiff * position.quantity - (result.fees || 0);
-
-      // 4. Get BotState for R calculation
-      let state = await BotState.findOne({ userId: position.userId });
-      
-      // Calculate R from equity and risk percentage (0.6%)
-      let currentR: number;
-      if (state && state.currentR && state.currentR > 0) {
-        currentR = state.currentR;
-      } else if (state && state.equity && state.equity > 0) {
-        // Calculate R as 0.6% of equity
-        currentR = state.equity * 0.006;
-        console.log(`[PositionManager] Calculated R from equity: $${currentR.toFixed(2)}`);
-      } else {
-        throw new Error('BotState not properly initialized - cannot calculate R value');
-      }
-      
-      const realizedR = currentR > 0 ? realizedPnl / currentR : 0;
-
-      // 5. Update position
-      position.status = 'CLOSED';
-      position.closed_at = new Date();
-      position.realized_pnl = Math.round(realizedPnl * 100) / 100;
-      position.realized_r = Math.round(realizedR * 100) / 100;
-      position.fees_paid = (position.fees_paid || 0) + (result.fees || 0);
-      await position.save();
-
-      // 6. Create trade record
-      await Trade.create({
-        userId: position.userId,
-        symbol: position.symbol,
-        side: position.side,
-        playbook: position.playbook,
-        entry_price: position.entry_price,
-        exit_price: closePrice,
-        quantity: position.quantity,
-        pnl_usd: realizedPnl,
-        pnl_r: realizedR,
-        fees: position.fees_paid,
-        date: position.closed_at,
-        outcome: realizedPnl > 0 ? 'WIN' : realizedPnl < 0 ? 'LOSS' : 'BREAKEVEN',
-        notes: `Closed via ${reason}`,
+        console.log(`[PositionManager] ✅ Position ${positionId} closed atomically: ${realizedPnl.toFixed(2)} USD (${realizedR.toFixed(2)}R)`);
       });
-
-      // 7. Update bot state PnL
-      if (state) {
-        state.dailyPnl += realizedPnl;
-        state.dailyPnlR += realizedR;
-        state.weeklyPnl += realizedPnl;
-        state.weeklyPnlR += realizedR;
-        await state.save();
-      }
-
-      console.log(`[PositionManager] ✅ Position ${positionId} closed: ${realizedPnl.toFixed(2)} USD (${realizedR.toFixed(2)}R)`);
+      
+      // Transaction committed successfully
+      console.log(`[PositionManager] Transaction committed for position ${positionId}`);
       
     } catch (error) {
-      console.error(`[PositionManager] ❌ Failed to close position ${positionId}:`, error);
+      // Transaction rolled back automatically
+      console.error(`[PositionManager] ❌ Transaction failed for position ${positionId}:`, error);
+      console.error(`[PositionManager] All changes rolled back`);
       throw error;
+    } finally {
+      // Always end the session
+      await session.endSession();
     }
   }
-
 
   /**
    * Update all open positions with current prices

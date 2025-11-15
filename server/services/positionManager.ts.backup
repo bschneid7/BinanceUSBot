@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import { Types } from 'mongoose';
 import Position from '../../models/Position';
 import Trade from '../../models/Trade';
@@ -6,7 +5,6 @@ import BotConfig from '../../models/BotConfig';
 import BotState from '../../models/BotState';
 import binanceService from '../binanceService';
 import executionRouter from './executionRouter';
-import exchangeFilters from '../exchangeFilters';
 import { RISK_LIMITS } from './constants';
 
 export class PositionManager {
@@ -199,38 +197,6 @@ export class PositionManager {
         }
       }
 
-      // Rule 3.5: Auto-close positions without stop-loss (Layer 1 safeguard)
-      if (!position.stop_price || position.stop_price === 0) {
-        const ageHours = (Date.now() - position.opened_at.getTime()) / (1000 * 60 * 60);
-        const autoCloseThreshold = 24; // Close after 24 hours without stop-loss
-        
-        // Check if position is protected (e.g., APEUSD for boost program)
-        const isProtected = position.symbol === 'APEUSD' && position.playbook === 'MANUAL';
-        
-        if (!isProtected && ageHours > autoCloseThreshold) {
-          console.log(`[PositionManager] Auto-closing position without stop-loss: ${position.symbol} (${ageHours.toFixed(1)}h old, threshold ${autoCloseThreshold}h)`);
-          await this.closePosition(positionId, 'AUTO_CLOSE_NO_STOP');
-          return; // Exit early since position is closed
-        }
-      }
-
-      // Rule 3.6: Age-based auto-close (Layer 2 safeguard)
-      const ageHours = (Date.now() - position.opened_at.getTime()) / (1000 * 60 * 60);
-      const maxAge = config?.max_position_age_hours || 72; // Default 72 hours
-      const isProtected = position.symbol === 'APEUSD' && position.playbook === 'MANUAL';
-      
-      if (!isProtected && ageHours > maxAge) {
-        // Don't auto-close if position has significant unrealized profit
-        const profitThreshold = 50; // Don't close if profit > $50
-        if (position.unrealized_pnl < profitThreshold) {
-          console.log(`[PositionManager] Auto-closing stale position: ${position.symbol} (${ageHours.toFixed(1)}h old, limit ${maxAge}h, P&L $${position.unrealized_pnl.toFixed(2)})`);
-          await this.closePosition(positionId, 'AUTO_CLOSE_STALE');
-          return; // Exit early since position is closed
-        } else {
-          console.log(`[PositionManager] Keeping profitable stale position: ${position.symbol} (${ageHours.toFixed(1)}h old, P&L $${position.unrealized_pnl.toFixed(2)})`);
-        }
-      }
-
       // Rule 4: Check stop loss hit
       if (position.current_price && position.stop_price) {
         const stopHit = position.side === 'LONG'
@@ -346,58 +312,21 @@ export class PositionManager {
   /**
    * Close a position
    */
-  /**
-   * Close position with atomic transaction
-   * ✅ FIXED: All database operations are now atomic (all succeed or all fail)
-   */
   async closePosition(
     positionId: Types.ObjectId,
     reason: 'STOP_LOSS' | 'TARGET' | 'MANUAL' | 'KILL_SWITCH' | 'TIME_STOP'
   ): Promise<void> {
     try {
-      // 1. Get position
       const position = await Position.findById(positionId);
       if (!position || position.status !== 'OPEN') {
-        throw new Error(`Position ${positionId} not found or already closed`);
+        return;
       }
 
       console.log(`[PositionManager] Closing position ${positionId} - Reason: ${reason}`);
-      
+
       const closePrice = position.current_price || position.entry_price;
 
-      // Round quantity to exchange lot size requirements
-      let roundedQuantity = position.quantity;
-      try {
-        roundedQuantity = await exchangeFilters.roundQuantity(position.symbol, position.quantity);
-        
-        if (roundedQuantity !== position.quantity) {
-          console.log(`[PositionManager] Truncated quantity: ${position.quantity} -> ${roundedQuantity}`);
-        }
-      } catch (error) {
-        console.error(`[PositionManager] Failed to round quantity, using original:`, error);
-        console.error(`[PositionManager] Error details:`, error);
-        // Continue with original quantity if rounding fails
-      }
-
-      // Check for dust (quantity below minQty after truncation)
-      const filters = exchangeFilters.getFilters(position.symbol);
-      if (filters && filters.lotSizeFilter) {
-        const minQty = parseFloat(filters.lotSizeFilter.minQty);
-        if (roundedQuantity < minQty) {
-          console.warn(`[PositionManager] Quantity ${roundedQuantity} is below minQty (${minQty}) for ${position.symbol}. Dust position detected.`);
-          
-          // Mark position as closed to prevent continuous retry
-          position.status = 'CLOSED';
-          position.closed_at = new Date();
-          position.close_reason = 'DUST';
-          await position.save();
-          
-          console.log(`[PositionManager] Marked dust position ${positionId} as CLOSED`);
-          return; // Exit successfully without placing order
-        }
-      }
-
-      // 2. Place closing order
+      // Place closing order
       const result = await executionRouter.executeSignal(
         position.userId,
         {
@@ -408,38 +337,34 @@ export class PositionManager {
           stopPrice: 0,
           reason: `Close position - ${reason}`,
         },
-        roundedQuantity,
+        position.quantity,
         position._id as Types.ObjectId
       );
 
       if (!result.success) {
-        throw new Error(`Failed to execute closing order: ${result.error}`);
+        console.error(`[PositionManager] Failed to close position: ${result.error}`);
+        return;
       }
 
-      // 3. Calculate realized PnL
+      // Calculate realized PnL
       const priceDiff = position.side === 'LONG'
         ? closePrice - position.entry_price
         : position.entry_price - closePrice;
+
       const realizedPnl = priceDiff * position.quantity - (result.fees || 0);
 
-      // 4. Get BotState for R calculation
-      let state = await BotState.findOne({ userId: position.userId });
-      
-      // Calculate R from equity and risk percentage (0.6%)
-      let currentR: number;
-      if (state && state.currentR && state.currentR > 0) {
-        currentR = state.currentR;
-      } else if (state && state.equity && state.equity > 0) {
-        // Calculate R as 0.6% of equity
-        currentR = state.equity * 0.006;
-        console.log(`[PositionManager] Calculated R from equity: $${currentR.toFixed(2)}`);
-      } else {
-        throw new Error('BotState not properly initialized - cannot calculate R value');
+      // Calculate realized R
+      let state = null;
+      let currentR = 42; // Default fallback
+      try {
+        state = await BotState.findOne({ userId: position.userId });
+        currentR = state?.currentR || 42;
+      } catch (error) {
+        console.warn(`[PositionManager] Could not fetch BotState, using default R value: ${error}`);
       }
-      
       const realizedR = currentR > 0 ? realizedPnl / currentR : 0;
 
-      // 5. Update position
+      // Update position
       position.status = 'CLOSED';
       position.closed_at = new Date();
       position.realized_pnl = Math.round(realizedPnl * 100) / 100;
@@ -447,7 +372,7 @@ export class PositionManager {
       position.fees_paid = (position.fees_paid || 0) + (result.fees || 0);
       await position.save();
 
-      // 6. Create trade record
+      // Create trade record
       await Trade.create({
         userId: position.userId,
         symbol: position.symbol,
@@ -464,7 +389,7 @@ export class PositionManager {
         notes: `Closed via ${reason}`,
       });
 
-      // 7. Update bot state PnL
+      // Update bot state PnL
       if (state) {
         state.dailyPnl += realizedPnl;
         state.dailyPnlR += realizedR;
@@ -473,14 +398,12 @@ export class PositionManager {
         await state.save();
       }
 
-      console.log(`[PositionManager] ✅ Position ${positionId} closed: ${realizedPnl.toFixed(2)} USD (${realizedR.toFixed(2)}R)`);
-      
+      console.log(`[PositionManager] Position closed: ${position.symbol} - PnL: $${realizedPnl.toFixed(2)} (${realizedR.toFixed(2)}R)`);
     } catch (error) {
-      console.error(`[PositionManager] ❌ Failed to close position ${positionId}:`, error);
+      console.error(`[PositionManager] Error closing position ${positionId}:`, error);
       throw error;
     }
   }
-
 
   /**
    * Update all open positions with current prices
@@ -539,6 +462,98 @@ export class PositionManager {
       console.log(`[PositionManager] Position updates complete`);
     } catch (error) {
       console.error('[PositionManager] Error updating all positions:', error);
+    }
+  }
+
+  /**
+   * Check if a new position would violate correlation risk limits
+   * Phase 3: Correlation-Based Risk Management
+   * @param userId User ID
+   * @param symbol Symbol to check
+   * @returns Object with canOpen flag and reason
+   */
+  async checkCorrelationRisk(
+    userId: Types.ObjectId,
+    symbol: string
+  ): Promise<{ canOpen: boolean; reason?: string; correlatedSymbols?: string[] }> {
+    try {
+      // Import CDD helper
+      const getCDDHelper = (await import('../cddDataHelper')).default;
+      const cddHelper = getCDDHelper();
+
+      // Get all open positions for this user
+      const openPositions = await Position.find({
+        userId,
+        status: 'OPEN',
+      });
+
+      if (openPositions.length === 0) {
+        return { canOpen: true };
+      }
+
+      // Correlation thresholds
+      const HIGH_CORRELATION = 0.7;
+      const MODERATE_CORRELATION = 0.5;
+      const MAX_HIGH_CORR_POSITIONS = 2;
+      const MAX_MODERATE_CORR_POSITIONS = 3;
+
+      const highlyCorrelated: string[] = [];
+      const moderatelyCorrelated: string[] = [];
+
+      // Check correlation with each open position
+      for (const position of openPositions) {
+        const correlation = await cddHelper.getCorrelation(symbol, position.symbol);
+
+        if (correlation === null) {
+          // No correlation data available, allow position
+          continue;
+        }
+
+        const absCorr = Math.abs(correlation);
+
+        if (absCorr >= HIGH_CORRELATION) {
+          highlyCorrelated.push(position.symbol);
+        } else if (absCorr >= MODERATE_CORRELATION) {
+          moderatelyCorrelated.push(position.symbol);
+        }
+      }
+
+      // Check if we exceed high correlation limit
+      if (highlyCorrelated.length >= MAX_HIGH_CORR_POSITIONS) {
+        console.log(
+          `[PositionManager] Correlation risk: ${symbol} highly correlated (>0.7) with ${highlyCorrelated.length} positions: ${highlyCorrelated.join(', ')}`
+        );
+        return {
+          canOpen: false,
+          reason: `Too many highly correlated positions (${highlyCorrelated.length}/${MAX_HIGH_CORR_POSITIONS})`,
+          correlatedSymbols: highlyCorrelated,
+        };
+      }
+
+      // Check if we exceed moderate correlation limit
+      if (moderatelyCorrelated.length >= MAX_MODERATE_CORR_POSITIONS) {
+        console.log(
+          `[PositionManager] Correlation risk: ${symbol} moderately correlated (>0.5) with ${moderatelyCorrelated.length} positions: ${moderatelyCorrelated.join(', ')}`
+        );
+        return {
+          canOpen: false,
+          reason: `Too many moderately correlated positions (${moderatelyCorrelated.length}/${MAX_MODERATE_CORR_POSITIONS})`,
+          correlatedSymbols: moderatelyCorrelated,
+        };
+      }
+
+      // Log correlation info if any correlations found
+      if (highlyCorrelated.length > 0 || moderatelyCorrelated.length > 0) {
+        console.log(
+          `[PositionManager] Correlation check passed for ${symbol}: ${highlyCorrelated.length} high, ${moderatelyCorrelated.length} moderate`
+        );
+      }
+
+      return { canOpen: true };
+    } catch (error) {
+      console.error(`[PositionManager] Error checking correlation risk:`, error);
+      // On error, allow position to avoid blocking trades
+      return { canOpen: true };
     }
   }
 }

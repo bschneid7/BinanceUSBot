@@ -1,0 +1,288 @@
+/**
+ * Exchange Filters Service
+ * 
+ * Handles precision-aware order validation using Binance exchange filters.
+ * Prevents order rejections due to incorrect price/quantity precision.
+ * 
+ * Enhanced with comprehensive logging and dual-method validation
+ */
+
+import binanceService from './binanceService';
+
+interface LotSizeFilter {
+  filterType: 'LOT_SIZE';
+  minQty: string;
+  maxQty: string;
+  stepSize: string;
+}
+
+interface PriceFilter {
+  filterType: 'PRICE_FILTER';
+  minPrice: string;
+  maxPrice: string;
+  tickSize: string;
+}
+
+interface SymbolFilters {
+  lotSizeFilter?: LotSizeFilter;
+  priceFilter?: PriceFilter;
+}
+
+class ExchangeFilters {
+  private filters: Map<string, SymbolFilters> = new Map();
+
+  async loadFilters(): Promise<void> {
+    try {
+      console.log('🔄 Loading exchange filters from Binance.US...');
+      const exchangeInfo = await binanceService.getExchangeInfo();
+      
+      for (const symbol of exchangeInfo.symbols) {
+        const lotSizeFilter = symbol.filters.find(
+          (f: any) => f.filterType === 'LOT_SIZE'
+        ) as LotSizeFilter | undefined;
+        
+        const priceFilter = symbol.filters.find(
+          (f: any) => f.filterType === 'PRICE_FILTER'
+        ) as PriceFilter | undefined;
+
+        this.filters.set(symbol.symbol, {
+          lotSizeFilter,
+          priceFilter,
+        });
+      }
+      
+      console.log(`✅ Loaded filters for ${this.filters.size} symbols`);
+    } catch (error) {
+      console.error('❌ Error loading exchange filters:', error);
+      throw error;
+    }
+  }
+
+  getFilters(symbol: string): SymbolFilters | undefined {
+    return this.filters.get(symbol);
+  }
+
+  /**
+   * Calculate precision from stepSize string
+   * Handles scientific notation (1e-8) and decimal notation (0.001)
+   */
+  private getPrecision(stepSize: string | number): number {
+    const s = typeof stepSize === 'number' ? stepSize.toString() : stepSize;
+
+    // 1. Handle scientific notation (e.g., 1e-8)
+    if (s.toLowerCase().includes('e')) {
+      const match = s.toLowerCase().match(/e-(\d+)/);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+    }
+
+    // 2. Handle decimal notation
+    if (!s.includes('.')) {
+      return 0; // Integer step size
+    }
+    
+    // 3. Remove trailing zeros to find the effective precision
+    let trimmedS = s.replace(/(\.\d*?)0+$/, '$1');
+    
+    // If all decimals were zeros (e.g., "1.000" -> "1."), remove the trailing dot.
+    if (trimmedS.endsWith('.')) {
+      trimmedS = trimmedS.substring(0, trimmedS.length - 1);
+    }
+
+    if (!trimmedS.includes('.')) {
+      return 0;
+    }
+
+    return trimmedS.length - trimmedS.indexOf('.') - 1;
+  }
+
+  /**
+   * Validate if quantity conforms to LOT_SIZE filter
+   * Accounts for floating point precision errors
+   */
+  validateLotSize(symbol: string, quantity: number): boolean {
+    const filters = this.filters.get(symbol);
+    if (!filters?.lotSizeFilter) {
+      console.warn(`⚠️ No LOT_SIZE filter found for ${symbol}`);
+      return false;
+    }
+
+    const { minQty, maxQty, stepSize } = filters.lotSizeFilter;
+    const step = parseFloat(stepSize);
+    const min = parseFloat(minQty);
+    const max = parseFloat(maxQty);
+
+    // Check min/max bounds
+    if (quantity < min || quantity > max) {
+      console.error(`❌ Quantity ${quantity} outside bounds [${min}, ${max}] for ${symbol}`);
+      return false;
+    }
+
+    // Check step size conformance (with floating point tolerance)
+    const remainder = quantity % step;
+    const isValid = Math.abs(remainder) < 1e-8 || Math.abs(remainder - step) < 1e-8;
+    
+    if (!isValid) {
+      console.error(`❌ Quantity ${quantity} does not conform to stepSize ${stepSize} (remainder: ${remainder})`);
+    }
+
+    return isValid;
+  }
+
+  /**
+   * Enhanced safe truncation with double-checking
+   * Uses precision-based truncation and validates against stepSize
+   */
+  safeTruncate(symbol: string, value: number): number {
+    const filters = this.filters.get(symbol);
+    if (!filters?.lotSizeFilter) {
+      throw new Error(`No LOT_SIZE filter found for ${symbol}`);
+    }
+
+    const stepSize = filters.lotSizeFilter.stepSize;
+    const step = parseFloat(stepSize);
+    const precision = this.getPrecision(stepSize);
+    
+    console.log(`🔍 safeTruncate for ${symbol}:`, {
+      originalValue: value,
+      stepSize,
+      step,
+      precision
+    });
+
+    // Method 1: Precision-based truncation
+    const factor = Math.pow(10, precision);
+    const truncatedByPrecision = Math.floor(value * factor) / factor;
+    
+    console.log(`  Method 1 (precision): ${truncatedByPrecision}`);
+
+    // Validate Method 1 result
+    if (this.validateLotSize(symbol, truncatedByPrecision)) {
+      console.log(`  ✅ Method 1 passed validation`);
+      return truncatedByPrecision;
+    }
+
+    // Method 2: Step-based truncation (fallback)
+    const truncatedByStep = Math.floor(value / step) * step;
+    const roundedByStep = parseFloat(truncatedByStep.toFixed(precision));
+    
+    console.log(`  Method 2 (step): ${roundedByStep}`);
+
+    // Validate Method 2 result
+    if (this.validateLotSize(symbol, roundedByStep)) {
+      console.log(`  ✅ Method 2 passed validation`);
+      return roundedByStep;
+    }
+
+    // If both methods fail, throw error
+    console.error(`  ❌ Both truncation methods failed for ${symbol}`);
+    throw new Error(`Unable to truncate ${value} to valid quantity for ${symbol}`);
+  }
+
+  /**
+   * Round quantity to step size using truncation
+   * Now uses safeTruncate for enhanced validation
+   */
+  roundQtyToStep(symbol: string, quantity: number): string {
+    console.log(`🔍 roundQtyToStep called:`, { symbol, quantity });
+    
+    const truncated = this.safeTruncate(symbol, quantity);
+    const result = truncated.toString();
+    
+    console.log(`  Final result: ${result}`);
+    return result;
+  }
+
+  /**
+   * Round quantity to step size (legacy method for backward compatibility)
+   * Delegates to safeTruncate
+   */
+  roundQuantity(symbol: string, quantity: number): number {
+    console.log(`🔍 roundQuantity called:`, { symbol, quantity });
+    return this.safeTruncate(symbol, quantity);
+  }
+
+  /**
+   * Round price to tick size using truncation
+   * Now uses getPrecision() for proper handling of all tickSize formats
+   */
+  roundPriceToTick(symbol: string, price: number): string {
+    const filters = this.filters.get(symbol);
+    if (!filters?.priceFilter) {
+      throw new Error(`No price filter found for ${symbol}`);
+    }
+
+    const tickSize = filters.priceFilter.tickSize;
+    const tick = parseFloat(tickSize);
+    const precision = this.getPrecision(tickSize);
+
+    console.log(`🔍 roundPriceToTick for ${symbol}:`, {
+      originalPrice: price,
+      tickSize,
+      tick,
+      precision
+    });
+
+    // Truncate to tick size
+    const truncated = Math.floor(price / tick) * tick;
+    const result = truncated.toFixed(precision);
+
+    console.log(`  Final price: ${result}`);
+    return result;
+  }
+
+  /**
+   * Validate order parameters before sending to exchange
+   */
+  validateOrder(symbol: string, price: number, quantity: number): {
+    valid: boolean;
+    adjustedPrice?: string;
+    adjustedQuantity?: string;
+    errors: string[];
+  } {
+    console.log(`🔍 validateOrder called:`, { symbol, price, quantity });
+    
+    const errors: string[] = [];
+    const filters = this.filters.get(symbol);
+
+    if (!filters) {
+      errors.push(`No filters found for ${symbol}`);
+      return { valid: false, errors };
+    }
+
+    try {
+      // Validate and adjust quantity
+      const adjustedQuantity = this.roundQtyToStep(symbol, quantity);
+      
+      // Validate and adjust price
+      const adjustedPrice = this.roundPriceToTick(symbol, price);
+
+      // Final validation
+      const qtyValid = this.validateLotSize(symbol, parseFloat(adjustedQuantity));
+      
+      if (!qtyValid) {
+        errors.push(`Adjusted quantity ${adjustedQuantity} failed LOT_SIZE validation`);
+      }
+
+      console.log(`  Validation result:`, {
+        valid: errors.length === 0,
+        adjustedPrice,
+        adjustedQuantity,
+        errors
+      });
+
+      return {
+        valid: errors.length === 0,
+        adjustedPrice,
+        adjustedQuantity,
+        errors,
+      };
+    } catch (error) {
+      errors.push(`Validation error: ${error instanceof Error ? error.message : String(error)}`);
+      return { valid: false, errors };
+    }
+  }
+}
+
+export default new ExchangeFilters();
