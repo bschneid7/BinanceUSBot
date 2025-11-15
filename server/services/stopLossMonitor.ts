@@ -4,6 +4,8 @@ import binanceService from './binanceService';
 import positionManager from './tradingEngine/positionManager';
 import { slackNotifier } from './slackNotifier';
 import { Types } from 'mongoose';
+import { STOP_LOSS_MONITOR, calculateBackoffDelay, formatUSD } from '../utils/constants';
+import { Position as IPosition, CloseReason } from '../utils/types';
 
 /**
  * Independent Stop Loss Monitor
@@ -16,28 +18,30 @@ import { Types } from 'mongoose';
 class StopLossMonitor {
   private interval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
-  private checkIntervalMs: number = 30000; // 30 seconds
   private lastCheckTime: Date | null = null;
   private checksPerformed: number = 0;
   private stopsTriggered: number = 0;
+  private readonly log = logger.child('StopLossMonitor');
 
   /**
    * Start the independent stop loss monitor
    */
   start(): void {
     if (this.isRunning) {
-      logger.warn('[StopLossMonitor] Already running');
+      this.log.warn('Already running');
       return;
     }
 
-    logger.info('[StopLossMonitor] Starting independent stop loss monitor');
-    logger.info(`[StopLossMonitor] Check interval: ${this.checkIntervalMs / 1000}s`);
+    this.log.info('Starting independent stop loss monitor', {
+      checkIntervalMs: STOP_LOSS_MONITOR.CHECK_INTERVAL_MS,
+      checkIntervalSec: STOP_LOSS_MONITOR.CHECK_INTERVAL_MS / 1000,
+    });
 
     this.isRunning = true;
 
     // Run first check immediately
     this.checkAllStopLosses().catch(error => {
-      logger.error('[StopLossMonitor] Error in initial check:', error);
+      this.log.error('Error in initial check', error);
     });
 
     // Schedule recurring checks
@@ -45,29 +49,35 @@ class StopLossMonitor {
       try {
         await this.checkAllStopLosses();
       } catch (error) {
-        logger.error('[StopLossMonitor] Error in scheduled check:', error);
+        this.log.error('Error in scheduled check', error as Error);
       }
-    }, this.checkIntervalMs);
+    }, STOP_LOSS_MONITOR.CHECK_INTERVAL_MS);
 
-    logger.info('[StopLossMonitor] ✅ Monitor started successfully');
+    this.log.info('✅ Monitor started successfully');
   }
 
   /**
    * Close position with retry logic and exponential backoff
    */
-  private async closePositionWithRetry(position: any, currentPrice: number): Promise<void> {
-    const maxRetries = 3;
-    const baseDelay = 1000; // 1 second
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  private async closePositionWithRetry(position: IPosition, currentPrice: number): Promise<void> {
+    for (let attempt = 1; attempt <= STOP_LOSS_MONITOR.MAX_RETRIES; attempt++) {
       try {
         await positionManager.closePosition(
           position._id as Types.ObjectId,
-          'STOP_LOSS'
+          'STOP_LOSS' as CloseReason
         );
         
         this.stopsTriggered++;
-        logger.info(`[StopLossMonitor] ✅ Position closed: ${position.symbol}`);
+        
+        this.log.position('closed', position.symbol, {
+          reason: 'STOP_LOSS',
+          entryPrice: position.entry_price,
+          stopPrice: position.stop_price,
+          exitPrice: currentPrice,
+          pnl: position.unrealized_pnl,
+          attempt,
+          maxRetries: STOP_LOSS_MONITOR.MAX_RETRIES,
+        });
         
         // Send success alert
         await slackNotifier.sendAlert({
@@ -75,33 +85,43 @@ class StopLossMonitor {
           message: `🚨 Stop Loss Triggered\n\n` +
             `Symbol: ${position.symbol}\n` +
             `Side: ${position.side}\n` +
-            `Entry: $${position.entry_price.toFixed(2)}\n` +
-            `Stop: $${position.stop_price.toFixed(2)}\n` +
-            `Exit: $${currentPrice.toFixed(2)}\n` +
-            `P&L: $${position.unrealized_pnl?.toFixed(2) || 'N/A'}\n` +
-            `Attempt: ${attempt}/${maxRetries}\n` +
+            `Entry: ${formatUSD(position.entry_price)}\n` +
+            `Stop: ${formatUSD(position.stop_price)}\n` +
+            `Exit: ${formatUSD(currentPrice)}\n` +
+            `P&L: ${formatUSD(position.unrealized_pnl || 0)}\n` +
+            `Attempt: ${attempt}/${STOP_LOSS_MONITOR.MAX_RETRIES}\n` +
             `Closed by: Independent Stop Loss Monitor`
         });
         
         return; // Success!
         
-      } catch (closeError: any) {
-        const errorMessage = closeError?.message || String(closeError);
+      } catch (closeError) {
+        const error = closeError as Error;
+        const errorMessage = error?.message || String(closeError);
         
         // Check if it's a race condition (position already closed)
         if (errorMessage.includes('not found') || errorMessage.includes('already closing')) {
-          logger.info(`[StopLossMonitor] Position ${position.symbol} already closed by another process`);
+          this.log.info('Position already closed by another process', {
+            symbol: position.symbol,
+            positionId: position._id.toString(),
+          });
           return; // Not an error
         }
         
         // If last attempt, send critical alert
-        if (attempt === maxRetries) {
-          logger.error(`[StopLossMonitor] ❌ Failed to close position ${position.symbol} after ${maxRetries} attempts`);
+        if (attempt === STOP_LOSS_MONITOR.MAX_RETRIES) {
+          this.log.critical('Failed to close position after max retries', error, {
+            symbol: position.symbol,
+            positionId: position._id.toString(),
+            currentPrice,
+            stopPrice: position.stop_price,
+            attempts: STOP_LOSS_MONITOR.MAX_RETRIES,
+          });
           
           await slackNotifier.sendAlert({
             type: 'CRITICAL',
-            message: `🚨 CRITICAL: Failed to close position ${position.symbol} at stop loss after ${maxRetries} attempts!\n` +
-              `Current: $${currentPrice.toFixed(2)}, Stop: $${position.stop_price.toFixed(2)}\n` +
+            message: `🚨 CRITICAL: Failed to close position ${position.symbol} at stop loss after ${STOP_LOSS_MONITOR.MAX_RETRIES} attempts!\n` +
+              `Current: ${formatUSD(currentPrice)}, Stop: ${formatUSD(position.stop_price)}\n` +
               `Error: ${errorMessage}\n` +
               `MANUAL INTERVENTION REQUIRED`
           });
@@ -110,8 +130,20 @@ class StopLossMonitor {
         }
         
         // Exponential backoff
-        const delay = baseDelay * Math.pow(2, attempt - 1);
-        logger.warn(`[StopLossMonitor] Attempt ${attempt}/${maxRetries} failed, retrying in ${delay}ms...`);
+        const delay = calculateBackoffDelay(
+          attempt,
+          STOP_LOSS_MONITOR.RETRY_BASE_DELAY_MS,
+          STOP_LOSS_MONITOR.RETRY_BASE_DELAY_MS * 8 // Max 8 seconds
+        );
+        
+        this.log.warn('Retry attempt failed, backing off', {
+          symbol: position.symbol,
+          attempt,
+          maxRetries: STOP_LOSS_MONITOR.MAX_RETRIES,
+          delayMs: delay,
+          error: errorMessage,
+        });
+        
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -122,7 +154,7 @@ class StopLossMonitor {
    */
   stop(): void {
     if (!this.isRunning) {
-      logger.warn('[StopLossMonitor] Not running');
+      this.log.warn('Not running');
       return;
     }
 
@@ -132,69 +164,56 @@ class StopLossMonitor {
     }
 
     this.isRunning = false;
-    logger.info('[StopLossMonitor] Monitor stopped');
-    logger.info(`[StopLossMonitor] Stats: ${this.checksPerformed} checks, ${this.stopsTriggered} stops triggered`);
+    this.log.info('Monitor stopped', {
+      checksPerformed: this.checksPerformed,
+      stopsTriggered: this.stopsTriggered,
+    });
   }
 
   /**
-   * Check all open positions for stop loss hits
+   * Check all open positions for stop loss triggers
    */
   private async checkAllStopLosses(): Promise<void> {
-    const startTime = Date.now();
-    this.lastCheckTime = new Date();
-    this.checksPerformed++;
-
     try {
-      // Get all open positions
-      const openPositions = await Position.find({ status: 'OPEN' });
+      this.checksPerformed++;
+      this.lastCheckTime = new Date();
 
-      if (!openPositions || openPositions.length === 0) {
-        logger.debug('[StopLossMonitor] No open positions to check');
+      // Get all open positions
+      const positions = await Position.find({ status: 'OPEN' }).lean<IPosition[]>();
+
+      if (positions.length === 0) {
+        this.log.debug('No open positions to check');
         return;
       }
 
-      logger.debug(`[StopLossMonitor] Checking ${openPositions.length} open positions`);
+      this.log.debug('Checking stop losses', {
+        positionCount: positions.length,
+        checkNumber: this.checksPerformed,
+      });
 
       // Check each position
-      const checkPromises = openPositions.map(position => 
-        this.checkPositionStopLoss(position)
-      );
-
-      await Promise.all(checkPromises);
-
-      const duration = Date.now() - startTime;
-      logger.debug(`[StopLossMonitor] Check complete in ${duration}ms`);
+      for (const position of positions) {
+        await this.checkPosition(position);
+      }
 
     } catch (error) {
-      logger.error('[StopLossMonitor] Error checking stop losses:', error);
+      this.log.error('Error checking stop losses', error as Error);
     }
   }
 
   /**
-   * Check a single position for stop loss hit
+   * Check a single position for stop loss trigger
    */
-  private async checkPositionStopLoss(position: any): Promise<void> {
+  private async checkPosition(position: IPosition): Promise<void> {
     try {
-      // Skip positions without stop loss
-      if (!position.stop_price || position.stop_price === 0) {
-        logger.debug(`[StopLossMonitor] ${position.symbol} has no stop loss set`);
-        return;
-      }
-
-      // Get current price from Binance
+      // Get current price
       const ticker = await binanceService.getTicker(position.symbol);
-      if (!ticker || !ticker.lastPrice) {
-        logger.warn(`[StopLossMonitor] Could not get price for ${position.symbol}`);
-        return;
-      }
+      const currentPrice = parseFloat(ticker.price);
 
-      const currentPrice = parseFloat(ticker.lastPrice);
-
-      // Validate price
-      if (isNaN(currentPrice) || currentPrice <= 0) {
-        logger.warn(`[StopLossMonitor] Invalid price for ${position.symbol}: ${ticker.lastPrice}`);
-        return;
-      }
+      // Update position current price
+      await Position.findByIdAndUpdate(position._id, {
+        current_price: currentPrice,
+      });
 
       // Check if stop loss is hit
       const stopHit = position.side === 'LONG'
@@ -202,38 +221,52 @@ class StopLossMonitor {
         : currentPrice >= position.stop_price;
 
       if (stopHit) {
-        const distancePct = Math.abs((currentPrice - position.stop_price) / position.stop_price * 100);
-        
-        logger.warn(`[StopLossMonitor] 🚨 STOP LOSS HIT: ${position.symbol}`);
-        logger.warn(`[StopLossMonitor]   Current: $${currentPrice.toFixed(2)}, Stop: $${position.stop_price.toFixed(2)}`);
-        logger.warn(`[StopLossMonitor]   Distance: ${distancePct.toFixed(2)}% ${position.side === 'LONG' ? 'below' : 'above'} stop`);
-        logger.warn(`[StopLossMonitor]   Unrealized P&L: $${position.unrealized_pnl?.toFixed(2) || 'N/A'}`);
+        const distancePct = Math.abs((currentPrice - position.stop_price) / position.stop_price) * 100;
+
+        this.log.warn('🚨 STOP LOSS HIT', {
+          symbol: position.symbol,
+          side: position.side,
+          currentPrice,
+          stopPrice: position.stop_price,
+          distancePct: distancePct.toFixed(2) + '%',
+          unrealizedPnl: position.unrealized_pnl,
+        });
 
         // Close the position with retry logic
         await this.closePositionWithRetry(position, currentPrice);
+        
       } else {
-        // Log positions approaching stop loss (within 5%)
+        // Log positions approaching stop loss
         const distanceToStop = position.side === 'LONG'
           ? (currentPrice - position.stop_price) / position.stop_price
           : (position.stop_price - currentPrice) / currentPrice;
 
-        if (distanceToStop < 0.05 && distanceToStop > 0) {
+        if (distanceToStop < STOP_LOSS_MONITOR.WARNING_DISTANCE_PCT && distanceToStop > 0) {
           const distancePct = distanceToStop * 100;
-          logger.info(`[StopLossMonitor] ⚠️  ${position.symbol} approaching stop: ${distancePct.toFixed(1)}% away`);
           
-          // Send warning if within 2%
-          if (distancePct < 2) {
+          this.log.info('⚠️  Position approaching stop', {
+            symbol: position.symbol,
+            currentPrice,
+            stopPrice: position.stop_price,
+            distancePct: distancePct.toFixed(1) + '%',
+          });
+          
+          // Send critical warning if very close
+          if (distancePct < STOP_LOSS_MONITOR.CRITICAL_WARNING_DISTANCE_PCT * 100) {
             await slackNotifier.sendAlert({
               type: 'WARNING',
               message: `⚠️ ${position.symbol} within ${distancePct.toFixed(1)}% of stop loss\n` +
-                `Current: $${currentPrice.toFixed(2)}, Stop: $${position.stop_price.toFixed(2)}`
+                `Current: ${formatUSD(currentPrice)}, Stop: ${formatUSD(position.stop_price)}`
             });
           }
         }
       }
 
     } catch (error) {
-      logger.error(`[StopLossMonitor] Error checking ${position.symbol}:`, error);
+      this.log.error('Error checking position', error as Error, {
+        symbol: position.symbol,
+        positionId: position._id.toString(),
+      });
     }
   }
 
@@ -243,21 +276,12 @@ class StopLossMonitor {
   getStatus() {
     return {
       isRunning: this.isRunning,
-      checkIntervalMs: this.checkIntervalMs,
-      lastCheckTime: this.lastCheckTime,
       checksPerformed: this.checksPerformed,
       stopsTriggered: this.stopsTriggered,
+      lastCheckTime: this.lastCheckTime,
+      checkIntervalMs: STOP_LOSS_MONITOR.CHECK_INTERVAL_MS,
     };
-  }
-
-  /**
-   * Force an immediate check (for testing)
-   */
-  async forceCheck(): Promise<void> {
-    logger.info('[StopLossMonitor] Force check requested');
-    await this.checkAllStopLosses();
   }
 }
 
-export const stopLossMonitor = new StopLossMonitor();
-export default stopLossMonitor;
+export default new StopLossMonitor();
