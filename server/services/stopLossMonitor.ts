@@ -210,6 +210,15 @@ class StopLossMonitor {
       const ticker = await binanceService.getTicker(position.symbol);
       const currentPrice = parseFloat(ticker.price);
 
+      // Skip if price is invalid (NaN or undefined)
+      if (!currentPrice || isNaN(currentPrice)) {
+        this.log.debug('Skipping position check - price not available yet', {
+          symbol: position.symbol,
+          positionId: position._id,
+        });
+        return;
+      }
+
       // Update position current price
       await Position.findByIdAndUpdate(position._id, {
         current_price: currentPrice,
