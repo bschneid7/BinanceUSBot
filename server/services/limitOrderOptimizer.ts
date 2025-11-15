@@ -9,6 +9,7 @@
  */
 
 import binanceService from './binanceService';
+import exchangeInfoCache from './exchangeInfoCache';
 
 interface LimitOrderParams {
   symbol: string;
@@ -28,6 +29,23 @@ interface OptimizedOrder {
 }
 
 class LimitOrderOptimizer {
+  /**
+   * Round price to the symbol's tickSize to avoid PRICE_FILTER errors
+   */
+  private roundToTickSize(symbol: string, price: number): number {
+    const symbolInfo = exchangeInfoCache.getSymbolInfo(symbol);
+    if (!symbolInfo || !symbolInfo.tickSize) {
+      // Fallback: round to 8 decimals
+      return Math.round(price * 100000000) / 100000000;
+    }
+    
+    const tickSize = symbolInfo.tickSize;
+    
+    // Use scaled integer arithmetic to avoid floating-point errors
+    const scale = 1 / tickSize;
+    return Math.round(price * scale) / scale;
+  }
+  
   /**
    * Calculate optimal limit order price
    * Places order slightly inside the spread to increase fill probability
@@ -72,9 +90,12 @@ class LimitOrderOptimizer {
       
       const optimizedPrice = basePrice * (1 + adjustment);
       
+      // Round to tickSize to avoid PRICE_FILTER errors
+      const roundedPrice = this.roundToTickSize(symbol, optimizedPrice);
+      
       return {
-        price: optimizedPrice,
-        reasoning: `BUY limit at ${optimizedPrice.toFixed(8)} (+${(adjustment * 100).toFixed(2)}% from ${basePrice.toFixed(8)}) - ${urgency} urgency`
+        price: roundedPrice,
+        reasoning: `BUY limit at ${roundedPrice.toFixed(8)} (+${(adjustment * 100).toFixed(2)}% from ${basePrice.toFixed(8)}) - ${urgency} urgency`
       };
       
     } else {
@@ -93,9 +114,12 @@ class LimitOrderOptimizer {
       
       const optimizedPrice = basePrice * (1 - adjustment);
       
+      // Round to tickSize to avoid PRICE_FILTER errors
+      const roundedPrice = this.roundToTickSize(symbol, optimizedPrice);
+      
       return {
-        price: optimizedPrice,
-        reasoning: `SELL limit at ${optimizedPrice.toFixed(8)} (-${(adjustment * 100).toFixed(2)}% from ${basePrice.toFixed(8)}) - ${urgency} urgency`
+        price: roundedPrice,
+        reasoning: `SELL limit at ${roundedPrice.toFixed(8)} (-${(adjustment * 100).toFixed(2)}% from ${basePrice.toFixed(8)}) - ${urgency} urgency`
       };
     }
   }
