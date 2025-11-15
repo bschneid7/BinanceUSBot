@@ -524,7 +524,10 @@ class BinanceService {
 
       if (params.price) orderParams.price = params.price;
       if (params.stopPrice) orderParams.stopPrice = params.stopPrice;
-      if (params.timeInForce) orderParams.timeInForce = params.timeInForce;
+      // timeInForce is only for LIMIT orders, not MARKET orders
+      if (params.timeInForce && params.type !== 'MARKET') {
+        orderParams.timeInForce = params.timeInForce;
+      }
       if (params.newClientOrderId)
         orderParams.newClientOrderId = params.newClientOrderId;
 

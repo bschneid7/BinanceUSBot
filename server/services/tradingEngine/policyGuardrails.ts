@@ -28,17 +28,23 @@ export class PolicyGuardrails {
     // - SELL to close LONG positions
     // We CANNOT create SHORT positions (no margin/futures on Binance.US)
     
-    if (side === 'SHORT' && action === 'SELL') {
+    // CRITICAL FIX: SELL orders are ALWAYS used to close LONG positions on Spot
+    // The 'side' parameter here refers to the position being closed, not the order direction
+    // So SELL + SHORT side means "closing a SHORT position" which is impossible on Spot
+    // But in practice, all positions should be LONG, so we allow all SELL orders
+    
+    // Only block if trying to open a SHORT position (which would be BUY with side=SHORT)
+    // This should never happen, but add as safety check
+    if (side === 'SHORT' && action === 'BUY') {
       return {
         approved: false,
-        reason: 'SHORT positions not allowed on Binance.US Spot. Only LONG positions are supported.',
+        reason: 'Cannot open SHORT positions on Binance.US Spot. Only LONG positions are supported.',
         gate: 'spot_only',
       };
     }
 
-    // Additional safety: SELL orders should only close existing LONG positions
-    // This is enforced by checking position existence in positionManager
-    
+    // Allow all SELL orders - they close existing positions
+    // Allow BUY orders with side=LONG - they open new positions
     return { approved: true };
   }
 
@@ -143,12 +149,16 @@ export class PolicyGuardrails {
     price: number
   ): PreTradeCheckResult {
     try {
-      const validation = await exchangeInfoCache.validateOrder(symbol, quantity, price);
+      // CRITICAL FIX: validateOrder expects (symbol, price, quantity) not (symbol, quantity, price)
+      const validation = await exchangeInfoCache.validateOrder(symbol, price, quantity);
       
       if (!validation.valid) {
+        console.error(`[PolicyGuardrails] Exchange filter validation failed for ${symbol}:`);
+        console.error(`  Price: ${price}, Quantity: ${quantity}`);
+        console.error(`  Error: ${validation.error || validation.reason || 'Unknown'}`);
         return {
           approved: false,
-          reason: validation.reason || 'Exchange filter validation failed',
+          reason: validation.error || validation.reason || 'Exchange filter validation failed',
           gate: 'exchange_filters',
         };
       }
@@ -264,6 +274,7 @@ export class PolicyGuardrails {
     proposedRiskR: number;
     proposedNotional: number;
     isEvent: boolean;
+    isClosing?: boolean; // Skip exposure limits for closing orders
   }): Promise<PreTradeCheckResult> {
     console.log(`[PolicyGuardrails] Running pre-trade gates for ${params.symbol} ${params.action}`);
 
@@ -313,17 +324,22 @@ export class PolicyGuardrails {
     console.log('[PolicyGuardrails] ✅ Gate 5 passed: Slippage');
 
     // Gate 6: Exposure limits (expensive - multiple DB queries + calculations)
-    const exposureCheck = await this.enforceExposureLimits(
-      params.userId,
-      params.symbol,
-      params.proposedRiskR,
-      params.proposedNotional
-    );
-    if (!exposureCheck.approved) {
-      console.log(`[PolicyGuardrails] ❌ GATE 6 FAILED: ${exposureCheck.reason}`);
-      return exposureCheck;
+    // SKIP for closing orders to prevent infinite recursion
+    if (!params.isClosing) {
+      const exposureCheck = await this.enforceExposureLimits(
+        params.userId,
+        params.symbol,
+        params.proposedRiskR,
+        params.proposedNotional
+      );
+      if (!exposureCheck.approved) {
+        console.log(`[PolicyGuardrails] ❌ GATE 6 FAILED: ${exposureCheck.reason}`);
+        return exposureCheck;
+      }
+      console.log('[PolicyGuardrails] ✅ Gate 6 passed: Exposure limits');
+    } else {
+      console.log('[PolicyGuardrails] ⏭️  Gate 6 skipped: Closing order (reduces risk)');
     }
-    console.log('[PolicyGuardrails] ✅ Gate 6 passed: Exposure limits');
 
     console.log('[PolicyGuardrails] ✅ ALL GATES PASSED - Order approved for execution');
     return { approved: true };

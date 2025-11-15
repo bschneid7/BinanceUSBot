@@ -155,8 +155,26 @@ class ExchangeInfoCache {
     if (info.maxPrice && price > info.maxPrice) {
       return { valid: false, error: `Price ${price} above maximum ${info.maxPrice}` };
     }
-    if (info.tickSize && price % info.tickSize !== 0) {
-      return { valid: false, error: `Price ${price} not a multiple of tick size ${info.tickSize}` };
+    
+    // CRITICAL FIX: Use scaled integer arithmetic for tick size validation
+    if (info.tickSize) {
+      const tickSizeStr = info.tickSize.toString();
+      let precision = 0;
+      if (tickSizeStr.includes('e')) {
+        const match = tickSizeStr.toLowerCase().match(/e-(\d+)/);
+        if (match) precision = parseInt(match[1], 10);
+      } else if (tickSizeStr.includes('.')) {
+        const parts = tickSizeStr.split('.');
+        precision = parts[1] ? parts[1].replace(/0+$/, '').length : 0;
+      }
+      
+      const scaleFactor = Math.pow(10, precision);
+      const priceScaled = Math.round(price * scaleFactor);
+      const tickScaled = Math.round(info.tickSize * scaleFactor);
+      
+      if (priceScaled % tickScaled !== 0) {
+        return { valid: false, error: `Price ${price} not a multiple of tick size ${info.tickSize}` };
+      }
     }
 
     // Check quantity filters
@@ -166,8 +184,29 @@ class ExchangeInfoCache {
     if (info.maxQty && quantity > info.maxQty) {
       return { valid: false, error: `Quantity ${quantity} above maximum ${info.maxQty}` };
     }
-    if (info.stepSize && quantity % info.stepSize !== 0) {
-      return { valid: false, error: `Quantity ${quantity} not a multiple of step size ${info.stepSize}` };
+    
+    // CRITICAL FIX: Use scaled integer arithmetic to avoid floating-point errors
+    if (info.stepSize) {
+      // Calculate precision from stepSize
+      const stepSizeStr = info.stepSize.toString();
+      let precision = 0;
+      if (stepSizeStr.includes('e')) {
+        const match = stepSizeStr.toLowerCase().match(/e-(\d+)/);
+        if (match) precision = parseInt(match[1], 10);
+      } else if (stepSizeStr.includes('.')) {
+        const parts = stepSizeStr.split('.');
+        precision = parts[1] ? parts[1].replace(/0+$/, '').length : 0;
+      }
+      
+      // Scale to integers
+      const scaleFactor = Math.pow(10, precision);
+      const quantityScaled = Math.round(quantity * scaleFactor);
+      const stepScaled = Math.round(info.stepSize * scaleFactor);
+      
+      // Integer modulo is exact (no floating-point errors)
+      if (quantityScaled % stepScaled !== 0) {
+        return { valid: false, error: `Quantity ${quantity} not a multiple of step size ${info.stepSize}` };
+      }
     }
 
     // Check notional (price * quantity)

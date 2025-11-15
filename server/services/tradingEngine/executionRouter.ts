@@ -135,6 +135,7 @@ export class ExecutionRouter {
         proposedRiskR,
         proposedNotional,
         isEvent: signal.isEvent || false,
+        isClosing: !!positionId, // Skip exposure limits when closing positions
       });
 
       if (!gateCheck.approved) {
@@ -309,19 +310,34 @@ export class ExecutionRouter {
         );
       }
 
-      // Force LIMIT_MAKER for maker-only execution (0.0% fee)
-      // LIMIT_MAKER will be rejected with -2010 if it would match immediately
-      const orderType = params.type === 'LIMIT' ? 'LIMIT_MAKER' : params.type;
+      // For closing positions, use MARKET orders for immediate execution
+      // For opening positions, use LIMIT orders with GTC
+      let orderType: string;
+      let timeInForce: 'GTC' | 'IOC' | 'FOK' | undefined;
+      
+      if (positionId) {
+        // Closing position - use MARKET for immediate execution
+        orderType = 'MARKET';
+        timeInForce = undefined;
+      } else if (params.type === 'LIMIT') {
+        // Opening position - use LIMIT with GTC
+        orderType = 'LIMIT';
+        timeInForce = 'GTC';
+      } else {
+        // Use the requested type
+        orderType = params.type;
+        timeInForce = undefined;
+      }
       
       // Place order on exchange
       const binanceOrder = await binanceService.placeOrder({
         symbol: params.symbol,
         side: params.side,
-        type: orderType,
+        type: orderType as any,
         quantity: params.quantity,
-        price: params.price,
+        price: orderType === 'MARKET' ? undefined : params.price,
         stopPrice: params.stopPrice,
-        timeInForce: orderType === 'LIMIT_MAKER' ? 'GTC' : undefined,
+        timeInForce,
         newClientOrderId: params.clientOrderId,
       });
       

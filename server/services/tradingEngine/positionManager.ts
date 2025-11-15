@@ -398,12 +398,25 @@ export class PositionManager {
       }
 
       // 2. Place closing order
+      // NOTE: On Binance.US Spot, only LONG positions are supported
+      // LONG positions are closed with SELL orders
+      // If position.side is SHORT, it's a data error - log and attempt to close anyway
+      let closeAction: 'BUY' | 'SELL';
+      if (position.side === 'LONG') {
+        closeAction = 'SELL';
+      } else {
+        // SHORT position on Spot exchange - this shouldn't happen
+        console.error(`[PositionManager] ⚠️ SHORT position detected on Spot exchange: ${position.symbol}`);
+        console.error(`[PositionManager] Attempting to close as SELL order (liquidate long position)`);
+        closeAction = 'SELL'; // Force SELL to close the actual long position
+      }
+
       const result = await executionRouter.executeSignal(
         position.userId,
         {
           symbol: position.symbol,
           playbook: position.playbook,
-          action: position.side === 'LONG' ? 'SELL' : 'BUY',
+          action: closeAction,
           entryPrice: closePrice,
           stopPrice: 0,
           reason: `Close position - ${reason}`,
