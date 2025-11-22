@@ -93,8 +93,9 @@ export class RiskEngine {
           const worstPnL = worstPosition.unrealized_pnl || 0;
           
           // Only rotate if worst position is losing AND new signal is high quality
-          // For now, we'll be conservative and only rotate if worst is losing > $5
-          const rotationThreshold = -5;
+          // Allow rotation of any losing position (even -$0.01)
+          // This enables swapping underperformers for better opportunities
+          const rotationThreshold = -0.01;
           
           if (worstPnL < rotationThreshold) {
             logger.info(`[RiskEngine] Smart rotation opportunity: Worst position ${worstPosition.symbol} has P&L $${worstPnL.toFixed(2)}`);
