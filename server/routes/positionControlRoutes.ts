@@ -45,9 +45,22 @@ router.post('/:id/close', async (req: Request, res: Response) => {
         const currentPrice = parseFloat(tickerData.price);
         console.log(`[PositionControl] Current price for ${position.symbol}: $${currentPrice}`);
 
+        // Get symbol precision requirements
+        const precision = await binanceService.getSymbolPrecision(position.symbol);
+        if (!precision) {
+            return res.status(500).json({
+                success: false,
+                error: `Failed to get precision info for ${position.symbol}`
+            });
+        }
+
+        // Adjust quantity to meet Binance precision requirements
+        const adjustedQuantity = binanceService.adjustQuantity(position.quantity, precision);
+        console.log(`[PositionControl] Adjusted quantity from ${position.quantity} to ${adjustedQuantity} for ${position.symbol}`);
+
         // Execute market sell order on Binance
         const side = position.side === 'LONG' ? 'SELL' : 'BUY';
-        console.log(`[PositionControl] Executing ${side} order for ${position.quantity} ${position.symbol}`);
+        console.log(`[PositionControl] Executing ${side} order for ${adjustedQuantity} ${position.symbol}`);
         
         let orderResponse;
         try {
@@ -55,7 +68,7 @@ router.post('/:id/close', async (req: Request, res: Response) => {
                 symbol: position.symbol,
                 side: side,
                 type: 'MARKET',
-                quantity: position.quantity,
+                quantity: adjustedQuantity,
                 newOrderRespType: 'FULL'
             });
             console.log(`[PositionControl] Order executed:`, orderResponse);
@@ -321,13 +334,21 @@ router.post('/close-all', async (req: Request, res: Response) => {
                 }
                 const currentPrice = parseFloat(tickerData.price);
 
+                // Get symbol precision and adjust quantity
+                const precision = await binanceService.getSymbolPrecision(position.symbol);
+                if (!precision) {
+                    errors.push({ symbol: position.symbol, error: 'Failed to get precision info' });
+                    continue;
+                }
+                const adjustedQuantity = binanceService.adjustQuantity(position.quantity, precision);
+
                 // Execute market order
                 const side = position.side === 'LONG' ? 'SELL' : 'BUY';
                 const orderResponse = await binanceService.placeOrder({
                     symbol: position.symbol,
                     side: side,
                     type: 'MARKET',
-                    quantity: position.quantity,
+                    quantity: adjustedQuantity,
                     newOrderRespType: 'FULL'
                 });
 
@@ -436,6 +457,130 @@ router.post('/close-all', async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             error: `Failed to close positions: ${error.message || 'Unknown error'}`
+        });
+    }
+});
+
+/**
+ * POST /api/positions/bulk-add-stop-loss
+ * Automatically add stop-loss to all positions without one
+ * Uses ATR-based stop-loss calculation (1.5x ATR below entry)
+ */
+router.post('/bulk-add-stop-loss', async (req: Request, res: Response) => {
+    try {
+        // Find all open positions without stop-loss (excluding APEUSD)
+        const positionsWithoutStopLoss = await Position.find({
+            status: 'OPEN',
+            $or: [
+                { stop_price: { $exists: false } },
+                { stop_price: 0 },
+                { stop_price: null }
+            ],
+            symbol: { $ne: 'APEUSD' } // Exclude APEUSD
+        });
+
+        if (positionsWithoutStopLoss.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No positions need stop-loss protection',
+                data: {
+                    updated: 0,
+                    positions: []
+                }
+            });
+        }
+
+        console.log(`[PositionControl] Adding stop-loss to ${positionsWithoutStopLoss.length} positions`);
+
+        const results = [];
+        const errors = [];
+
+        for (const position of positionsWithoutStopLoss) {
+            try {
+                // Calculate ATR-based stop-loss
+                // Default: 1.5x ATR below entry for LONG positions
+                const stopAtrMult = 1.5;
+                
+                // Get current ATR for the symbol
+                let atr = 0;
+                try {
+                    // Fetch recent klines to calculate ATR
+                    const klines = await binanceService.getKlines(position.symbol, '1h', 24);
+                    if (klines && klines.length > 0) {
+                        // Simple ATR calculation: average of high-low ranges
+                        const ranges = klines.map((k: any) => parseFloat(k.high) - parseFloat(k.low));
+                        atr = ranges.reduce((sum: number, r: number) => sum + r, 0) / ranges.length;
+                    }
+                } catch (atrError) {
+                    console.warn(`[PositionControl] Failed to calculate ATR for ${position.symbol}, using 2% default`);
+                    atr = position.entry_price * 0.02; // Fallback: 2% of entry price
+                }
+
+                // Calculate stop-loss price
+                let stopLoss;
+                if (position.side === 'LONG') {
+                    stopLoss = position.entry_price - (atr * stopAtrMult);
+                } else {
+                    stopLoss = position.entry_price + (atr * stopAtrMult);
+                }
+
+                // Ensure stop-loss is reasonable (not negative, not too close)
+                if (stopLoss <= 0) {
+                    stopLoss = position.entry_price * 0.95; // Fallback: 5% below entry
+                }
+
+                // Round to appropriate precision
+                const precision = position.entry_price > 100 ? 2 : position.entry_price > 1 ? 4 : 6;
+                stopLoss = parseFloat(stopLoss.toFixed(precision));
+
+                // Update position
+                position.stop_price = stopLoss;
+                await position.save();
+
+                console.log(`[PositionControl] Added stop-loss to ${position.symbol}: $${stopLoss} (entry: $${position.entry_price}, ATR: $${atr.toFixed(4)})`);
+
+                results.push({
+                    symbol: position.symbol,
+                    positionId: position._id,
+                    entryPrice: position.entry_price,
+                    stopLoss: stopLoss,
+                    atr: atr,
+                    side: position.side
+                });
+
+                // Broadcast position update
+                const ws = getDashboardWebSocket();
+                if (ws) {
+                    ws.broadcastPositionUpdate({
+                        ...position.toObject(),
+                        action: 'UPDATED'
+                    });
+                }
+
+            } catch (posError: any) {
+                console.error(`[PositionControl] Failed to add stop-loss to ${position.symbol}:`, posError);
+                errors.push({
+                    symbol: position.symbol,
+                    error: posError.message || 'Unknown error'
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Successfully added stop-loss to ${results.length} position(s)`,
+            data: {
+                updated: results.length,
+                positions: results,
+                errors: errors.length > 0 ? errors : undefined
+            }
+        });
+
+    } catch (error: any) {
+        console.error('[PositionControl] Error in bulk stop-loss addition:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to add stop-loss protections'
         });
     }
 });

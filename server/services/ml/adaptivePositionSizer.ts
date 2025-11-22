@@ -139,8 +139,25 @@ class AdaptivePositionSizer {
       const stopDistance = Math.abs(input.entryPrice - input.stopLossPrice);
       const stopDistancePercent = stopDistance / input.entryPrice;
       
-      const quantity = riskAmount / stopDistance;
+      // Calculate risk-based quantity
+      const riskBasedQuantity = riskAmount / stopDistance;
+      
+      // Also calculate exposure-based quantity to respect portfolio limits
+      // Assume max 75% exposure across 6 positions = 12.5% per position
+      const maxExposurePct = 0.75;
+      const maxPositions = 6;
+      const maxNotionalPerPosition = (input.currentEquity * maxExposurePct) / maxPositions;
+      const exposureBasedQuantity = maxNotionalPerPosition / input.entryPrice;
+      
+      // Use the SMALLER of the two to respect both risk and exposure limits
+      const quantity = Math.min(riskBasedQuantity, exposureBasedQuantity);
       const positionValue = quantity * input.entryPrice;
+      
+      // Log if exposure limit is constraining the position
+      if (quantity < riskBasedQuantity) {
+        reasoning.push(`Exposure limit applied: ${quantity.toFixed(6)} (was ${riskBasedQuantity.toFixed(6)} from risk calc)`);
+        logger.warn(`[AdaptivePositionSizer] ${input.signal.symbol} position constrained by exposure limit: ${(positionValue / input.currentEquity * 100).toFixed(1)}% of equity`);
+      }
 
       // Calculate final scaling factor
       scalingFactors.final = riskPercent / this.config.baseRiskPerTrade;

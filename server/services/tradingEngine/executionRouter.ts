@@ -120,7 +120,7 @@ export class ExecutionRouter {
       // Get current equity for R calculation
       const state = await BotState.findOne({ userId });
       const currentEquity = (state?.currentEquity || state?.startingEquity) ?? 10000; // Fallback to reasonable default
-      const rDollarValue = currentEquity * (config?.risk?.R_pct / 100);
+      const rDollarValue = currentEquity * config?.risk?.R_pct;
       const proposedRiskR = (riskPerUnit * quantity) / rDollarValue;
 
       // Run comprehensive pre-trade gates
@@ -329,13 +329,27 @@ export class ExecutionRouter {
         timeInForce = undefined;
       }
       
+      // Get symbol precision and adjust quantity/price
+      const precision = await binanceService.getSymbolPrecision(params.symbol);
+      if (!precision) {
+        throw new Error(`Failed to get precision info for ${params.symbol}`);
+      }
+      
+      const adjustedQuantity = binanceService.adjustQuantity(params.quantity, precision);
+      const adjustedPrice = params.price ? binanceService.adjustPrice(params.price, precision) : undefined;
+      
+      logger.info(
+        `[ExecutionRouter] Adjusted order: quantity ${params.quantity} -> ${adjustedQuantity}, ` +
+        `price ${params.price} -> ${adjustedPrice}`
+      );
+      
       // Place order on exchange
       const binanceOrder = await binanceService.placeOrder({
         symbol: params.symbol,
         side: params.side,
         type: orderType as any,
-        quantity: params.quantity,
-        price: orderType === 'MARKET' ? undefined : params.price,
+        quantity: adjustedQuantity,
+        price: orderType === 'MARKET' ? undefined : adjustedPrice,
         stopPrice: params.stopPrice,
         timeInForce,
         newClientOrderId: params.clientOrderId,

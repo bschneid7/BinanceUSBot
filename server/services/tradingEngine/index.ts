@@ -5,6 +5,7 @@ import BotState from '../../models/BotState';
 import Position from '../../models/Position';
 import marketScanner from './marketScanner';
 import mlEnhancedSignalGenerator from './mlEnhancedSignalGenerator';
+import signalGenerator from './signalGenerator';
 import riskEngine from './riskEngine';
 import executionRouter from './executionRouter';
 import positionManager from './positionManager';
@@ -539,7 +540,7 @@ export class TradingEngine {
         return;
       }
       
-      // Use ML position sizing if available, otherwise fall back to standard
+      // Use ML position sizing if available, otherwise fall back to exposure-based sizing
       let quantity;
       let mlPositionInfo = null;
       
@@ -548,12 +549,32 @@ export class TradingEngine {
         mlPositionInfo = mlEnhanced.positionSize;
         logger.info(`[TradingEngine] Using ML position size: ${quantity.toFixed(6)} (${mlPositionInfo.reasoning[0]})`);
       } else {
-        quantity = riskEngine.calculatePositionSize(
+        // Calculate position size based on exposure limits, not just risk
+        // Max notional per position = (equity * max_exposure_pct) / max_positions
+        const maxNotionalPerPosition = (state.equity * config.risk.max_exposure_pct) / config.risk.max_positions;
+        
+        // Calculate quantity from max notional
+        let exposureBasedQuantity = maxNotionalPerPosition / signal.entryPrice;
+        
+        // Also calculate risk-based quantity
+        const riskBasedQuantity = riskEngine.calculatePositionSize(
           signal.entryPrice,
           signal.stopPrice,
           riskAmount
         );
-        logger.info(`[TradingEngine] Using standard position size: ${quantity.toFixed(6)}`);
+        
+        // Use the SMALLER of the two to respect both limits
+        quantity = Math.min(exposureBasedQuantity, riskBasedQuantity);
+        
+        const notionalValue = quantity * signal.entryPrice;
+        const exposurePct = (notionalValue / state.equity) * 100;
+        
+        logger.info(
+          `[TradingEngine] Position sizing: ` +
+          `exposure-based=${exposureBasedQuantity.toFixed(6)}, ` +
+          `risk-based=${riskBasedQuantity.toFixed(6)}, ` +
+          `using=${quantity.toFixed(6)} (${exposurePct.toFixed(1)}% of equity)`
+        );
       }
 
       // Calculate notional value

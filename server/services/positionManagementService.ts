@@ -177,12 +177,20 @@ class PositionManagementService {
 
       logger.info(`[PositionMgmt] Closing ${symbol} position: ${quantity} units at $${currentPrice.toFixed(2)} (Reason: ${reason})`);
 
+      // Get symbol precision and adjust quantity
+      const precision = await binanceService.getSymbolPrecision(symbol);
+      if (!precision) {
+        throw new Error(`Failed to get precision info for ${symbol}`);
+      }
+      const adjustedQuantity = binanceService.adjustQuantity(quantity, precision);
+      logger.info(`[PositionMgmt] Adjusted quantity from ${quantity} to ${adjustedQuantity}`);
+
       // Place market sell order
       const order = await binanceService.placeOrder(
         symbol,
         'SELL',
         'MARKET',
-        quantity
+        adjustedQuantity
       );
 
       // Update position
@@ -215,12 +223,20 @@ class PositionManagementService {
 
       logger.info(`[PositionMgmt] Partially closing ${symbol}: ${(percentage * 100).toFixed(0)}% (${quantityToClose} units) at $${currentPrice.toFixed(2)}`);
 
+      // Get symbol precision and adjust quantity
+      const precision = await binanceService.getSymbolPrecision(symbol);
+      if (!precision) {
+        throw new Error(`Failed to get precision info for ${symbol}`);
+      }
+      const adjustedQuantity = binanceService.adjustQuantity(quantityToClose, precision);
+      logger.info(`[PositionMgmt] Adjusted partial close quantity from ${quantityToClose} to ${adjustedQuantity}`);
+
       // Place market sell order
       const order = await binanceService.placeOrder(
         symbol,
         'SELL',
         'MARKET',
-        quantityToClose
+        adjustedQuantity
       );
 
       // Update position
