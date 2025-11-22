@@ -244,13 +244,24 @@ export class GridTradingService {
             continue;
           }
 
+          // Get Binance precision requirements
+          const precision = await binanceService.getSymbolPrecision(symbol);
+          if (!precision) {
+            logger.error(`[GridTrading] Failed to get precision for ${symbol}, skipping level`);
+            continue;
+          }
+
+          // Adjust quantity and price to Binance requirements
+          const adjustedQuantity = binanceService.adjustQuantity(quantity, precision);
+          const adjustedPrice = binanceService.adjustPrice(level.price, precision);
+
           // Place limit order
           const order = await binanceService.placeOrder({
             symbol,
             side: level.side,
             type: 'LIMIT',
-            quantity,
-            price: level.price,
+            quantity: adjustedQuantity,
+            price: adjustedPrice,
             timeInForce: 'GTC' // Good Till Cancelled
           });
 
@@ -352,13 +363,24 @@ export class GridTradingService {
         return;
       }
 
+      // Get Binance precision requirements
+      const precision = await binanceService.getSymbolPrecision(symbol);
+      if (!precision) {
+        logger.error(`[GridTrading] Failed to get precision for ${symbol}`);
+        return;
+      }
+
+      // Adjust quantity and price to Binance requirements
+      const adjustedQuantity = binanceService.adjustQuantity(quantity, precision);
+      const adjustedPrice = binanceService.adjustPrice(oppositePrice, precision);
+
       // Place opposite order
       const order = await binanceService.placeOrder({
         symbol,
         side: oppositeSide,
         type: 'LIMIT',
-        quantity,
-        price: this.roundPrice(oppositePrice),
+        quantity: adjustedQuantity,
+        price: adjustedPrice,
         timeInForce: 'GTC'
       });
 

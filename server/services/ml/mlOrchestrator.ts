@@ -69,7 +69,9 @@ class MLOrchestrator {
     signal: Signal,
     marketData: MarketData,
     currentEquity: number,
-    recentWinRate?: number
+    recentWinRate?: number,
+    maxExposurePct?: number,
+    maxPositions?: number
   ): Promise<MLEnhancedSignal | null> {
     try {
       if (!this.enabled) {
@@ -158,7 +160,9 @@ class MLOrchestrator {
         entryPrice: marketData.currentPrice,
         stopLossPrice,
         recentWinRate,
-        accountVolatility: marketData.volatility
+        accountVolatility: marketData.volatility,
+        maxExposurePct: maxExposurePct || 0.75,  // Default to 75% if not provided
+        maxPositions: maxPositions || 6           // Default to 6 if not provided
       };
 
       const positionSize = await adaptivePositionSizer.calculatePositionSize(positionSizeInput);

@@ -220,11 +220,22 @@ export class PortfolioRebalancer {
         try {
           // Place market sell order
           const symbol = `${holding.asset}USD`;
+          
+          // Get Binance precision requirements
+          const precision = await binanceService.getSymbolPrecision(symbol);
+          if (!precision) {
+            logger.error(`[PortfolioRebalancer] Failed to get precision for ${symbol}, skipping`);
+            continue;
+          }
+          
+          // Adjust quantity to Binance requirements
+          const adjustedQuantity = binanceService.adjustQuantity(holding.quantity, precision);
+          
           const order = await binanceService.placeOrder({
             symbol,
             side: 'SELL',
             type: 'LIMIT', // Use limit for maker fees
-            quantity: holding.quantity
+            quantity: adjustedQuantity
           });
 
           logger.info(`[PortfolioRebalancer] ✅ Sold ${holding.quantity} ${holding.asset} for ~$${holding.valueUSD.toFixed(2)}`);
