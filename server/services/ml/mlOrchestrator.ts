@@ -12,6 +12,8 @@ import { marketRegimeDetector, RegimeAnalysis } from './marketRegimeDetector';
 import { adaptivePositionSizer, PositionSizeInput } from './adaptivePositionSizer';
 import { metricsService } from '../metricsService';
 import { slackNotifier } from '../slackNotifier';
+import MLPerformanceLog from '../../models/MLPerformanceLog';
+import MLModel from '../../models/MLModel';
 
 export interface MLEnhancedSignal extends FilteredSignal {
   patterns: any[];
@@ -206,6 +208,43 @@ class MLOrchestrator {
       // Send Slack notification for high-confidence signals
       if (overallConfidence >= 0.80) {
         await this.notifyHighConfidenceSignal(enhancedSignal, marketData);
+      }
+
+      // NEW: Log ML prediction for learning feedback loop
+      try {
+        const activeModel = await MLModel.findOne({ isDeployed: true });
+        if (activeModel && signal.userId) {
+          await MLPerformanceLog.create({
+            userId: signal.userId,
+            timestamp: new Date(),
+            signal: {
+              symbol: signal.symbol,
+              action: signal.side,
+              playbook: signal.playbook || 'A',
+              price: marketData.currentPrice,
+              atr: marketData.volatility * marketData.currentPrice, // Approximate ATR
+              volatility: marketData.volatility,
+              volume: marketData.volume24h,
+              spread_bps: 10 // Approximate, would need actual spread
+            },
+            ml: {
+              modelId: activeModel._id,
+              modelVersion: activeModel.version,
+              prediction: filteredSignal.mlScore > 0.6 ? 'buy' : (filteredSignal.mlScore < 0.4 ? 'sell' : 'hold'),
+              confidence: filteredSignal.mlConfidence,
+              approved: true,
+              processingTimeMs: Date.now() - Date.now() // Would need actual start time
+            },
+            marketContext: {
+              priceAtSignal: marketData.currentPrice,
+              rsi: marketData.rsi,
+              macd: marketData.macd
+            }
+          });
+          logger.info(`[MLOrchestrator] Logged ML prediction for ${signal.symbol}`);
+        }
+      } catch (error: any) {
+        logger.error('[MLOrchestrator] Error logging ML prediction:', error);
       }
 
       return enhancedSignal;

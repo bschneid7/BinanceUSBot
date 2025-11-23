@@ -371,12 +371,17 @@ export class TradingEngine {
           const state = await BotState.findOne({ userId });
           const currentEquity = state?.equity || 10000;
 
+          // Get config for position sizing parameters
+          const config = await BotConfig.findOne({ userId });
+          
           // Process through ML orchestrator
           const mlSignal = await mlOrchestrator.processSignal(
             signal,
             symbolMarketData,
             currentEquity,
-            state?.recentWinRate
+            state?.recentWinRate,
+            config?.risk?.max_exposure_pct,
+            config?.risk?.max_positions
           );
 
           // PPO Shadow Mode: Get PPO recommendation

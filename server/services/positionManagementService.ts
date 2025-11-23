@@ -16,6 +16,7 @@
 import Position from '../models/Position';
 import binanceService from './binanceService';
 import { Types } from 'mongoose';
+import MLPerformanceLog from '../models/MLPerformanceLog';
 
 const logger = console;
 
@@ -202,6 +203,31 @@ class PositionManagementService {
       await position.save();
 
       logger.info(`[PositionMgmt] ${symbol} position closed successfully. P&L: $${position.realized_pnl.toFixed(2)}`);
+
+      // NEW: Log outcome for ML learning feedback loop
+      try {
+        if (position.orderId) {
+          const holdTimeMinutes = (position.exit_time - position.entry_time) / (1000 * 60);
+          await MLPerformanceLog.updateOne(
+            { 'execution.orderId': position.orderId },
+            {
+              $set: {
+                'outcome.closed': true,
+                'outcome.closeTime': position.exit_time,
+                'outcome.closePrice': currentPrice,
+                'outcome.pnl': position.realized_pnl,
+                'outcome.pnlR': position.realized_pnl / (position.entry_price * 0.018), // Approximate R
+                'outcome.winLoss': position.realized_pnl > 0 ? 'win' : (position.realized_pnl < 0 ? 'loss' : 'breakeven'),
+                'outcome.holdTimeMinutes': holdTimeMinutes,
+                'outcome.exitReason': reason
+              }
+            }
+          );
+          logger.info(`[PositionMgmt] Logged ML outcome for ${symbol}`);
+        }
+      } catch (error) {
+        logger.error(`[PositionMgmt] Error logging ML outcome:`, error);
+      }
     } catch (error) {
       logger.error(`[PositionMgmt] Error closing position ${position.symbol}:`, error);
       throw error;

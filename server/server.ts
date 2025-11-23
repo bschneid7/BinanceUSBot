@@ -46,6 +46,7 @@ import positionMgmtRunner from "./runPositionManagement";
 import orderReconciliationService from './services/orderReconciliationService';
 import strategyDriftDetector from './services/strategyDriftDetector';
 import gracefulShutdownManager from './services/gracefulShutdownManager';
+import { onlineLearningService } from './services/ml/onlineLearningService';
 // Load environment variables
 dotenv.config();
 if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
@@ -223,6 +224,16 @@ const server = app.listen(port, () => {
   // Start health check service
   healthCheckService.start();
   console.log('[HealthCheck] Health monitoring started');
+  
+  // NEW: Start ML online learning service
+  if (process.env.ENABLE_ML_LEARNING !== 'false') {
+    try {
+      onlineLearningService.start();
+      console.log('[MLLearning] ✅ Online learning service started');
+    } catch (error: any) {
+      console.error('[MLLearning] ⚠️  Failed to start online learning:', error.message);
+    }
+  }
   
   // Initialize critical services (stop loss monitor, etc.)
   (async () => {
