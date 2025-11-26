@@ -98,6 +98,7 @@ export class PositionManager {
       position.unrealized_pnl = Math.round(unrealizedPnl * 100) / 100;
       position.unrealized_r = Math.round(unrealizedR * 100) / 100;
       position.hold_time = hold_time;
+      position.notional = Math.round(currentPrice * position.quantity * 100) / 100;
 
       await position.save();
     } catch (error) {
