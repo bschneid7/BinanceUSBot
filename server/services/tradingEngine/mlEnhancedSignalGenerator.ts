@@ -128,15 +128,49 @@ class MLEnhancedSignalGenerator {
     },
     currentPosition: number // 0 = no position, 1 = long
   ): number[] {
+    // FIXED: Return 17 dimensions to match trained model
     // Normalize features
     const normalizedPrice = marketData.price / 100000; // Normalize to ~0-1 range
     const normalizedVolume = marketData.volume / 10000000; // Normalize volume
     const normalizedVolatility = Math.min(marketData.volatility, 1.0); // Cap at 1.0
 
-    // Mock sentiment (in production, would come from sentiment analysis)
-    const sentiment = 0.5; // Neutral
+    // Mock values for features not available in real-time (would be calculated from market data)
+    const latestReturn = 0.0; // Would calculate from price history
+    const avgReturn5 = 0.0; // 5-period average return
+    const volatility5 = normalizedVolatility; // Use provided volatility
+    const rsi = 0.5; // Neutral RSI (would calculate from price history)
+    const macd = 0.0; // MACD indicator
+    const signal = 0.0; // MACD signal
+    const fundingRate = 0.0; // CDD: Current funding rate (not available for spot)
+    const fundingTrend = 0.0; // CDD: 7-day funding trend
+    const vwapDeviation = 0.0; // CDD: VWAP deviation
+    const orderFlow = 0.0; // CDD: Order flow imbalance
+    const correlation = 0.5; // CDD: Correlation score (neutral)
+    const hasPosition = currentPosition; // 0 or 1
+    const positionPnl = 0.0; // Position PnL (would calculate from actual position)
+    const normalizedEquity = 0.0; // Account equity change
+    const drawdown = 0.0; // Account drawdown
 
-    return [normalizedPrice, normalizedVolume, normalizedVolatility, sentiment, currentPosition];
+    // Return 17-dimensional state vector matching training
+    return [
+      normalizedPrice,    // 1. Latest normalized price
+      latestReturn,       // 2. Latest return
+      normalizedVolume,   // 3. Latest normalized volume
+      avgReturn5,         // 4. 5-period avg return
+      volatility5,        // 5. 5-period volatility
+      rsi,                // 6. RSI indicator
+      macd,               // 7. MACD
+      signal,             // 8. MACD signal
+      fundingRate,        // 9. CDD: Current funding rate
+      fundingTrend,       // 10. CDD: 7-day funding trend
+      vwapDeviation,      // 11. CDD: VWAP deviation
+      orderFlow,          // 12. CDD: Order flow imbalance
+      correlation,        // 13. CDD: Correlation score
+      hasPosition,        // 14. Position indicator
+      positionPnl,        // 15. Position PnL
+      normalizedEquity,   // 16. Account equity
+      drawdown            // 17. Account drawdown
+    ];
   }
 
   /**
