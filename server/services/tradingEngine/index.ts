@@ -523,14 +523,6 @@ export class TradingEngine {
         return;
       }
 
-      // Check available capital before calculating position size
-      const requiredCapital = signal.entryPrice * 1; // Assume 1 unit for check
-      const capitalCheck = await reserveManager.checkAvailableCapital(userId, requiredCapital);
-      if (!capitalCheck.available) {
-        await signalGenerator.recordSignal(userId, signal, 'SKIPPED', capitalCheck.reason);
-        return;
-      }
-
       // Calculate position size
       // Validate that currentR is fresh (updated within last 5 minutes)
       const now = new Date();
@@ -562,15 +554,7 @@ export class TradingEngine {
         mlPositionInfo = mlEnhanced.positionSize;
         logger.info(`[TradingEngine] Using ML position size: ${quantity.toFixed(6)} (${mlPositionInfo.reasoning[0]})`);
       } else {
-        // Check available capital before calculating position size
-      const requiredCapital = signal.entryPrice * 1; // Assume 1 unit for check
-      const capitalCheck = await reserveManager.checkAvailableCapital(userId, requiredCapital);
-      if (!capitalCheck.available) {
-        await signalGenerator.recordSignal(userId, signal, 'SKIPPED', capitalCheck.reason);
-        return;
-      }
-
-      // Calculate position size based on exposure limits, not just risk
+        // Calculate position size based on exposure limits, not just risk
         // Max notional per position = (equity * max_exposure_pct) / max_positions
         const maxNotionalPerPosition = (state.equity * config.risk.max_exposure_pct) / config.risk.max_positions;
         
