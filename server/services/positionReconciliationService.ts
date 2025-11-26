@@ -96,6 +96,13 @@ class PositionReconciliationService {
               continue; // Skip if we can't get price
             }
             
+            // Skip dust positions (< $10 notional value)
+            const notionalValue = quantity * currentPrice;
+            if (notionalValue < 10) {
+              console.log(`[Reconciliation] Skipping dust position ${asset}: $${notionalValue.toFixed(2)} < $10 minimum`);
+              continue;
+            }
+            
             // Create position with MANUAL playbook
             const newPosition = new Position({
               userId,
