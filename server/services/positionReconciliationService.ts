@@ -96,6 +96,13 @@ class PositionReconciliationService {
               continue; // Skip if we can't get price
             }
             
+            // PERMANENT FIX: Blacklist specific symbols that are known to cause issues
+            const SYMBOL_BLACKLIST = ['ZECUSD', 'APEUSD']; // Add any problematic symbols here
+            if (SYMBOL_BLACKLIST.includes(symbol)) {
+              console.log(`[Reconciliation] Skipping blacklisted symbol ${symbol}`);
+              continue;
+            }
+
             // Skip dust positions (< $10 notional value)
             const notionalValue = quantity * currentPrice;
             
