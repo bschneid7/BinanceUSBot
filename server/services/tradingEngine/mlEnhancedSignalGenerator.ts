@@ -343,7 +343,7 @@ class MLEnhancedSignalGenerator {
               symbol: signal.symbol,
               action: signal.action,
               playbook: signal.playbook,
-              price: signal.entry_price,
+              price: signal.entryPrice,
               atr: symbolData.atr,
               volatility: symbolData.volatility,
               volume: symbolData.volume,
@@ -352,7 +352,7 @@ class MLEnhancedSignalGenerator {
             ml: {
               modelId: deployedModel._id,
               modelVersion: deployedModel.version,
-              prediction: mlPrediction.actionName,
+              prediction: mlPrediction.actionName === 'unknown' ? 'hold' : mlPrediction.actionName,
               confidence: mlPrediction.confidence,
               approved,
               rejectionReason,
