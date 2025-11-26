@@ -556,7 +556,17 @@ export class TradingEngine {
       } else {
         // Calculate position size based on exposure limits, not just risk
         // Max notional per position = (equity * max_exposure_pct) / max_positions
-        const maxNotionalPerPosition = (state.equity * config.risk.max_exposure_pct) / config.risk.max_positions;
+        let maxNotionalPerPosition = (state.equity * config.risk.max_exposure_pct) / config.risk.max_positions;
+
+        // CRITICAL FIX: Cap maxNotionalPerPosition by the actual available capital
+        // Available capital = equity - currentExposure - reserveFloor
+        const reserveFloorPct = config.reserve?.floor_pct ?? (0.05); // Default 5%
+        const reserveFloor = state.equity * reserveFloorPct;
+        const currentExposure = state.equity - (state.equity * (state.reservePct / 100)); // Reverse calculate current exposure
+        const maxTradeableCapital = state.equity - currentExposure - reserveFloor;
+
+        // Use the smaller of the calculated max notional or the max tradeable capital
+        maxNotionalPerPosition = Math.min(maxNotionalPerPosition, maxTradeableCapital);
         
         // Calculate quantity from max notional
         let exposureBasedQuantity = maxNotionalPerPosition / signal.entryPrice;
