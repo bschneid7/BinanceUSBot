@@ -172,13 +172,21 @@ export class SignalGenerator {
       // Calculate prior day high (PDH) - last 24 1h bars
       const pdh = Math.max(...klines1h.slice(-24).map(k => parseFloat(k.high)));
 
-      // Check if current price is breaking out
+      // Check if current price is breaking out OR approaching breakout (anticipatory entry)
       const breakoutLevel = Math.max(high12, pdh);
+      const distanceToBreakout = ((breakoutLevel - price) / price) * 100;
+      
+      // ADJUSTED: Allow anticipatory entry within 0.5% of breakout level
       const isBreakout = price >= breakoutLevel;
+      const isAnticipatory = distanceToBreakout <= 0.5 && distanceToBreakout > 0;
 
-      if (!isBreakout) {
-        console.log(`[PlaybookA] ${symbol} - No breakout: Price $${price.toFixed(2)} < $${breakoutLevel.toFixed(2)}`);
+      if (!isBreakout && !isAnticipatory) {
+        console.log(`[PlaybookA] ${symbol} - No breakout: Price $${price.toFixed(2)} < $${breakoutLevel.toFixed(2)} (${distanceToBreakout.toFixed(2)}% away)`);
         return null;
+      }
+      
+      if (isAnticipatory) {
+        console.log(`[PlaybookA] ${symbol} - Anticipatory entry: ${distanceToBreakout.toFixed(2)}% from breakout`);
       }
 
       // Volume confirmation: current volume vs 20-bar average
@@ -351,9 +359,9 @@ export class SignalGenerator {
       const extremePrice = direction === 'BUY' ? highPrice : lowPrice;
       const pullbackPct = Math.abs((price - extremePrice) / extremePrice) * 100;
 
-      // We want a pullback of at least 0.5% but not more than 2%
-      if (pullbackPct < 0.5 || pullbackPct > 2.0) {
-        console.log(`[PlaybookC] ${symbol} - Pullback ${pullbackPct.toFixed(2)}% not in range (0.5-2.0%)`);
+      // We want a pullback of at least 0.3% but not more than 2% (ADJUSTED: 0.5→0.3 for more signals)
+      if (pullbackPct < 0.3 || pullbackPct > 2.0) {
+        console.log(`[PlaybookC] ${symbol} - Pullback ${pullbackPct.toFixed(2)}% not in range (0.3-2.0%)`);
         return null;
       }
 
@@ -504,8 +512,9 @@ export class SignalGenerator {
       const closes = klines1h.map(k => parseFloat(k.close));
       const rsi = this.calculateRSI(closes, 14);
 
-      if (rsi > 40) {
-        console.log(`[PlaybookE] ${symbol} - RSI not oversold: ${rsi.toFixed(2)} > 40`);
+      // ADJUSTED: RSI < 50 (was 40) to enter earlier in downtrends
+      if (rsi > 50) {
+        console.log(`[PlaybookE] ${symbol} - RSI not oversold: ${rsi.toFixed(2)} > 50`);
         return null;
       }
 
