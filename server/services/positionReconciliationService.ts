@@ -98,6 +98,14 @@ class PositionReconciliationService {
             
             // Skip dust positions (< $10 notional value)
             const notionalValue = quantity * currentPrice;
+            
+            // CRITICAL FIX: Ensure price is > 0 before checking notional.
+            // If price is 0, it means the ticker failed, and we should skip.
+            if (currentPrice === 0) {
+              console.log(`[Reconciliation] Skipping dust position ${asset}: Price is 0, likely delisted or ticker failed`);
+              continue;
+            }
+            
             if (notionalValue < 10) {
               console.log(`[Reconciliation] Skipping dust position ${asset}: $${notionalValue.toFixed(2)} < $10 minimum`);
               continue;
