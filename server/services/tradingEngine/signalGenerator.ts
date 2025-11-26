@@ -206,7 +206,8 @@ export class SignalGenerator {
       const stopDistance = config.playbook_A.stop_atr_mult * atr;
       const stopPrice = breakoutLevel - stopDistance;
 
-      console.log(`[PlaybookA] ${symbol} - SIGNAL: Breakout at $${price.toFixed(2)}, PDH: $${pdh.toFixed(2)}, High20: $${high20.toFixed(2)}, Volume: ${volumeMultiple.toFixed(2)}x, Stop: $${stopPrice.toFixed(2)}`);
+      // FIX: high20 is not defined. Replacing with high12 which is defined.
+      console.log(`[PlaybookA] ${symbol} - SIGNAL: Breakout at $${price.toFixed(2)}, PDH: $${pdh.toFixed(2)}, High12: $${high12.toFixed(2)}, Volume: ${volumeMultiple.toFixed(2)}x, Stop: $${stopPrice.toFixed(2)}`);
 
       return {
         symbol,
