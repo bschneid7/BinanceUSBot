@@ -175,7 +175,8 @@ export class ReserveRebalancer {
    */
   private async calculateTotalEquity(): Promise<number> {
     try {
-      const balances = await binanceService.getAllBalances();
+      const accountInfo = await binanceService.getAccountInfo();
+      const balances = accountInfo.balances;
       let totalEquity = 0;
 
       for (const balance of balances) {

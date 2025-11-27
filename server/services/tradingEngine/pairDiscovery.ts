@@ -27,7 +27,8 @@ export class PairDiscovery {
       logger.info('[PairDiscovery] Discovering trading pairs from account balances...');
 
       // 1. Get all account balances from Binance
-      const balances = await binanceService.getAllBalances();
+      const accountInfo = await binanceService.getAccountInfo();
+      const balances = accountInfo.balances;
       
       // 2. Filter to assets with non-zero balances
       const assets = balances
