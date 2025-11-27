@@ -562,7 +562,13 @@ export class TradingEngine {
         // Available capital = equity - currentExposure - reserveFloor
         const reserveFloorPct = config.reserve?.floor_pct ?? (0.05); // Default 5%
         const reserveFloor = state.equity * reserveFloorPct;
-        const currentExposure = state.equity - (state.equity * (state.reservePct / 100)); // Reverse calculate current exposure
+        
+        // Fix: Add fallback for reservePct to prevent NaN
+        const reservePct = state.reservePct ?? 0;
+        const currentExposure = state.equity - (state.equity * (reservePct / 100)); // Reverse calculate current exposure
+        
+        logger.info(`[TradingEngine] Capital calculation: equity=$${state.equity.toFixed(2)}, reservePct=${reservePct}%, currentExposure=$${currentExposure.toFixed(2)}, reserveFloor=$${reserveFloor.toFixed(2)}`);
+        
         const maxTradeableCapital = state.equity - currentExposure - reserveFloor;
 
         // Use the smaller of the calculated max notional or the max tradeable capital
