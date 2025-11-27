@@ -287,12 +287,17 @@ export class PolicyGuardrails {
     console.log('[PolicyGuardrails] ✅ Gate 1 passed: Spot-only');
 
     // Gate 2: Per-trade R clamp (cheap - single DB query)
-    const rClampCheck = await this.enforcePerTradeRClamp(params.userId, params.proposedRiskR);
-    if (!rClampCheck.approved) {
-      console.log(`[PolicyGuardrails] ❌ GATE 2 FAILED: ${rClampCheck.reason}`);
-      return rClampCheck;
+    // SKIP for closing orders - closing reduces risk, doesn't add it
+    if (!params.isClosing) {
+      const rClampCheck = await this.enforcePerTradeRClamp(params.userId, params.proposedRiskR);
+      if (!rClampCheck.approved) {
+        console.log(`[PolicyGuardrails] ❌ GATE 2 FAILED: ${rClampCheck.reason}`);
+        return rClampCheck;
+      }
+      console.log('[PolicyGuardrails] ✅ Gate 2 passed: R clamp');
+    } else {
+      console.log('[PolicyGuardrails] ⏭️  Gate 2 skipped: Closing order (reduces risk)');
     }
-    console.log('[PolicyGuardrails] ✅ Gate 2 passed: R clamp');
 
     // Gate 3: Kill-switch stickiness (moderate - DB query + logic)
     const killSwitchCheck = await this.enforceKillSwitchStickiness(params.userId);
