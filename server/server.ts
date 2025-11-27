@@ -47,6 +47,7 @@ import orderReconciliationService from './services/orderReconciliationService';
 import strategyDriftDetector from './services/strategyDriftDetector';
 import gracefulShutdownManager from './services/gracefulShutdownManager';
 import { onlineLearningService } from './services/ml/onlineLearningService';
+import { initializeInfrastructure, shutdownInfrastructure } from './services/initializeInfrastructure';
 // Load environment variables
 dotenv.config();
 if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
@@ -82,6 +83,12 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
 });
 // Database connection
 connectDB();
+
+// Initialize event sourcing and message queue infrastructure
+initializeInfrastructure().catch(error => {
+  logger.error('[Server] Failed to initialize infrastructure:', error);
+  process.exit(1);
+});
 app.on("error", (error: Error) => {
   console.error(`Server error: ${error.message}`);
   console.error(error.stack);
@@ -208,6 +215,11 @@ const server = app.listen(port, () => {
   // Register server with graceful shutdown manager
   gracefulShutdownManager.registerServer(server);
   gracefulShutdownManager.registerSignalHandlers();
+  
+  // Register infrastructure shutdown
+  gracefulShutdownManager.registerShutdownHandler(async () => {
+    await shutdownInfrastructure();
+  });
   console.log('[GracefulShutdown] Graceful shutdown handlers registered');
 
   // Initialize daily snapshot cron job
