@@ -120,7 +120,8 @@ export class ExecutionRouter {
       // Get current equity for R calculation
       const state = await BotState.findOne({ userId });
       const currentEquity = (state?.currentEquity || state?.startingEquity) ?? 10000; // Fallback to reasonable default
-      const rDollarValue = currentEquity * config?.risk?.R_pct;
+      const rPct = config?.risk?.R_pct ?? 0.01; // Default 1% per R if not configured
+      const rDollarValue = currentEquity * rPct;
       const proposedRiskR = (riskPerUnit * quantity) / rDollarValue;
 
       // Run comprehensive pre-trade gates
