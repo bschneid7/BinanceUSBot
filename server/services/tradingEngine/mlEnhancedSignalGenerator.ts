@@ -336,19 +336,23 @@ class MLEnhancedSignalGenerator {
 
         // Log ML performance for this signal
         try {
-          await MLPerformanceLog.create({
-            userId,
-            timestamp: new Date(),
-            signal: {
-              symbol: signal.symbol,
-              action: signal.action,
-              playbook: signal.playbook,
-              price: signal.entryPrice,
-              atr: symbolData.atr,
-              volatility: symbolData.volatility,
-              volume: symbolData.volume,
-              spread_bps: symbolData.spread_bps,
-            },
+          // Validate symbolData has all required fields
+          if (!symbolData.atr || !symbolData.volatility || !symbolData.volume || !symbolData.spread_bps) {
+            console.warn(`[MLEnhancedSigGen] Skipping ML performance log for ${signal.symbol}: Missing required symbolData fields`);
+          } else {
+            await MLPerformanceLog.create({
+              userId,
+              timestamp: new Date(),
+              signal: {
+                symbol: signal.symbol,
+                action: signal.action,
+                playbook: signal.playbook,
+                price: signal.entryPrice,
+                atr: symbolData.atr,
+                volatility: symbolData.volatility,
+                volume: symbolData.volume,
+                spread_bps: symbolData.spread_bps,
+              },
             ml: {
               modelId: deployedModel._id,
               modelVersion: deployedModel.version,
@@ -363,6 +367,7 @@ class MLEnhancedSignalGenerator {
               vwap: symbolData.vwap,
             },
           });
+          }
         } catch (logError) {
           console.error('[MLEnhancedSigGen] Error logging ML performance:', logError);
           // Don't fail signal generation if logging fails

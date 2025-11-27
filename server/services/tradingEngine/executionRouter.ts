@@ -123,6 +123,18 @@ export class ExecutionRouter {
       const rPct = config?.risk?.R_pct ?? 0.01; // Default 1% per R if not configured
       const rDollarValue = currentEquity * rPct;
       const proposedRiskR = (riskPerUnit * quantity) / rDollarValue;
+      
+      // DEBUG: Log risk calculation values
+      logger.info(`[ExecutionRouter] Risk calculation: riskPerUnit=$${riskPerUnit.toFixed(4)}, quantity=${quantity.toFixed(6)}, currentEquity=$${currentEquity.toFixed(2)}, rPct=${rPct}, rDollarValue=$${rDollarValue.toFixed(2)}, proposedRiskR=${proposedRiskR.toFixed(4)}R`);
+      
+      // Validate proposedRiskR before passing to PolicyGuardrails
+      if (!proposedRiskR || isNaN(proposedRiskR) || proposedRiskR <= 0) {
+        logger.error(`[ExecutionRouter] Invalid proposedRiskR calculated: ${proposedRiskR}. Skipping signal.`);
+        return {
+          success: false,
+          error: `Invalid risk calculation: proposedRiskR=${proposedRiskR}`,
+        };
+      }
 
       // Run comprehensive pre-trade gates
       const gateCheck = await policyGuardrails.checkAllPreTradeGates({
