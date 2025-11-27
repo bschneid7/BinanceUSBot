@@ -36,6 +36,7 @@ import transactionRoutes from './routes/transactions';
 import botActivityRoutes from './routes/botActivityRoutes';
 import snapshotRoutes from './routes/snapshotRoutes';
 import adminRoutes from './routes/adminRoutes';
+import phase2Routes from './routes/phase2Routes';
 import { connectDB } from './config/database';
 import { initializeSnapshotCron } from './utils/snapshotCron';
 // import { initializeDailyReportCron } from './cron/dailyReportCron';
@@ -48,6 +49,7 @@ import strategyDriftDetector from './services/strategyDriftDetector';
 import gracefulShutdownManager from './services/gracefulShutdownManager';
 import { onlineLearningService } from './services/ml/onlineLearningService';
 import { initializeInfrastructure, shutdownInfrastructure } from './services/initializeInfrastructure';
+import { initializePhase2, shutdownPhase2 } from './services/initializePhase2';
 // Load environment variables
 dotenv.config();
 if (!process.env.MONGO_URI && !process.env.DATABASE_URL) {
@@ -88,6 +90,12 @@ connectDB();
 initializeInfrastructure().catch(error => {
   logger.error('[Server] Failed to initialize infrastructure:', error);
   process.exit(1);
+});
+
+// Initialize Phase 2 infrastructure (continuous reconciliation, etc.)
+initializePhase2().catch(error => {
+  logger.error('[Server] Failed to initialize Phase 2:', error);
+  // Don't exit - Phase 2 is optional
 });
 app.on("error", (error: Error) => {
   console.error(`Server error: ${error.message}`);
@@ -140,6 +148,8 @@ app.use('/api', capitalAllocationRoutes);
 app.use('/api/reconciliation', orderReconciliationRoutes);
 app.use('/api/drift', strategyDriftRoutes);
 app.use('/api/rate-limit', rateLimitRoutes);
+// Phase 2 Routes (Continuous Reconciliation, Health Monitoring)
+app.use('/api/phase2', phase2Routes);
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {
   try {
@@ -218,6 +228,7 @@ const server = app.listen(port, () => {
   
   // Register infrastructure shutdown
   gracefulShutdownManager.registerShutdownHandler(async () => {
+    await shutdownPhase2();
     await shutdownInfrastructure();
   });
   console.log('[GracefulShutdown] Graceful shutdown handlers registered');

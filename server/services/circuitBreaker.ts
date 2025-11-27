@@ -1,5 +1,6 @@
 import logger from "../utils/logger";
 import { alertService } from "./alertService";
+import eventStore from "./eventStore";
 
 type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
 
@@ -140,6 +141,23 @@ export class CircuitBreaker {
     
     if (oldState !== newState) {
       logger.info(`Circuit breaker [${this.name}] state changed: ${oldState} -> ${newState}`);
+      
+      // Record state change event
+      eventStore.record({
+        type: 'CircuitBreakerStateChanged',
+        aggregateType: 'CircuitBreaker',
+        aggregateId: this.name,
+        data: {
+          service: this.name,
+          oldState,
+          newState,
+          failureCount: this.failureCount,
+          successCount: this.successCount,
+          timestamp: new Date(),
+        },
+      }).catch(err => {
+        logger.error(`Failed to record circuit breaker state change event:`, err);
+      });
     }
   }
 
