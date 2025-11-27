@@ -27,6 +27,8 @@ import { ppoAgent, TradingState } from '../ml/ppoAgent';
 import { shadowModeTracker } from '../ml/shadowModeTracker';
 import stopLossMonitor from '../stopLossMonitor';
 import tradingCircuitBreaker from '../tradingCircuitBreaker';
+import pairDiscovery from './pairDiscovery';
+import reserveRebalancer from './reserveRebalancer';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -329,6 +331,35 @@ export class TradingEngine {
       } catch (error) {
         logger.error('[TradingEngine] Failed to update positions:', error);
         // Continue - position updates are not critical for new signals
+      }
+
+      // Step 3.5: Dynamically discover trading pairs from account balances
+      try {
+        const activePairs = await pairDiscovery.getActiveTradingPairs();
+        if (activePairs.length > 0) {
+          // Update config with discovered pairs
+          await BotConfig.updateOne(
+            { userId },
+            { $set: { 'scanner.pairs': activePairs } }
+          );
+          logger.info(`[TradingEngine] ✅ Updated trading pairs dynamically: ${activePairs.length} pairs`);
+        } else {
+          logger.warn('[TradingEngine] ⚠️ No trading pairs discovered from account');
+        }
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to discover trading pairs:', error);
+        // Continue with existing pairs in config
+      }
+
+      // Step 3.6: Check and rebalance reserves if needed
+      try {
+        const rebalanced = await reserveRebalancer.checkAndRebalance(userId);
+        if (rebalanced) {
+          logger.info('[TradingEngine] ✅ Reserves rebalanced successfully');
+        }
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to rebalance reserves:', error);
+        // Continue - rebalancing is not critical for this scan cycle
       }
 
       // Step 4: Scan markets
