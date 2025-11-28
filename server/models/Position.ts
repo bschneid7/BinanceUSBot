@@ -33,6 +33,8 @@ export interface IPosition extends Document {
   stop_loss?: number; // Current stop loss price
   trailing_stop_active?: boolean; // Whether trailing stop is active
   peak_price?: number; // Peak price reached (for trailing stops)
+  trailing_stop_percent?: number; // Trailing stop percentage (e.g., 5 for 5%)
+  trailing_stop_activation?: number; // Profit % required to activate trailing stop
   
   // Partial close tracking
   partial_close_1?: boolean; // First partial close executed
@@ -160,6 +162,14 @@ const schema = new Schema<IPosition>({
   },
   peak_price: {
     type: Number,
+  },
+  trailing_stop_percent: {
+    type: Number,
+    default: 5, // Default 5% trailing stop
+  },
+  trailing_stop_activation: {
+    type: Number,
+    default: 3, // Activate after 3% profit
   },
   
   // Partial close tracking

@@ -30,6 +30,8 @@ import stopLossMonitor from '../stopLossMonitor';
 import tradingCircuitBreaker from '../tradingCircuitBreaker';
 import pairDiscovery from './pairDiscovery';
 import reserveRebalancer from './reserveRebalancer';
+import { trailingStopLoss } from '../trading/trailingStopLoss';
+import { exitStrategies } from '../trading/exitStrategies';
 
 export class TradingEngine {
   private scanIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -152,6 +154,27 @@ export class TradingEngine {
         throw new Error('Cannot start engine without stop loss monitor');
       }
 
+      // Start Trailing Stop-Loss Monitor
+      logger.info('[TradingEngine] Starting Trailing Stop-Loss Monitor...');
+      try {
+        await trailingStopLoss.initializeFromPositions();
+        trailingStopLoss.start();
+        logger.info('[TradingEngine] ✅ Trailing Stop-Loss Monitor started');
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to start Trailing Stop-Loss Monitor:', error);
+        logger.warn('[TradingEngine] Continuing without trailing stops');
+      }
+
+      // Start Advanced Exit Strategies Monitor
+      logger.info('[TradingEngine] Starting Advanced Exit Strategies Monitor...');
+      try {
+        const exitMonitorInterval = exitStrategies.startMonitoring(30000); // Check every 30s
+        logger.info('[TradingEngine] ✅ Exit Strategies Monitor started');
+      } catch (error) {
+        logger.error('[TradingEngine] Failed to start Exit Strategies Monitor:', error);
+        logger.warn('[TradingEngine] Continuing without advanced exit strategies');
+      }
+
       // Start self-scheduling scan loop (prevents overlaps)
       const scheduleNextScan = async () => {
         const userKey = userId.toString();
@@ -228,6 +251,15 @@ export class TradingEngine {
         logger.info('[TradingEngine] User Data Stream stopped');
       } catch (error) {
         logger.error('[TradingEngine] Error stopping User Data Stream:', error);
+      }
+
+      // Stop Trailing Stop-Loss Monitor
+      logger.info('[TradingEngine] Stopping Trailing Stop-Loss Monitor...');
+      try {
+        trailingStopLoss.stop();
+        logger.info('[TradingEngine] Trailing Stop-Loss Monitor stopped');
+      } catch (error) {
+        logger.error('[TradingEngine] Error stopping Trailing Stop-Loss Monitor:', error);
       }
 
       // Update state

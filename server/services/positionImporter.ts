@@ -45,8 +45,15 @@ class PositionImporter {
         positions: [] as any[]
       };
       
-      // Process each balance
-      for (const balance of accountInfo.balances) {
+      // Process each balance with rate limiting
+      for (let i = 0; i < accountInfo.balances.length; i++) {
+        const balance = accountInfo.balances[i];
+        
+        // Add delay every 5 requests to avoid rate limits
+        if (i > 0 && i % 5 === 0) {
+          logger.info(`[PositionImporter] Rate limit pause (processed ${i} assets)...`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second pause
+        }
         const asset = balance.asset;
         const free = parseFloat(balance.free);
         const locked = parseFloat(balance.locked);
@@ -70,11 +77,14 @@ class PositionImporter {
           let currentPrice: number;
           
           try {
+            // Add small delay between price requests
+            await new Promise(resolve => setTimeout(resolve, 200));
             const ticker = await binanceService.getTickerPrice(symbol);
             currentPrice = parseFloat(ticker.price);
           } catch (error) {
             // Try USDT pair if USD pair doesn't exist
             try {
+              await new Promise(resolve => setTimeout(resolve, 200));
               const symbolUsdt = `${asset}USDT`;
               const ticker = await binanceService.getTickerPrice(symbolUsdt);
               currentPrice = parseFloat(ticker.price);
