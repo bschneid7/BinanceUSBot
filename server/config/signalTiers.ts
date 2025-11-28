@@ -12,25 +12,43 @@
  *   }
  * 
  * Switching Tiers:
- *   Set SIGNAL_TIER environment variable to one of: TIER_1_CONSERVATIVE, TIER_2_MODERATE, TIER_3_AGGRESSIVE
+ *   Set SIGNAL_TIER environment variable to one of: TIER_1_CONSERVATIVE, TIER_2_MODERATE, TIER_3_AGGRESSIVE, TIER_4_ULTRA_AGGRESSIVE
  */
 
 export const TIERS = {
   /**
+   * TIER_4_ULTRA_AGGRESSIVE (NEW)
+   * 
+   * For low-volatility ranging markets with 0.3-1% moves.
+   * Maximum frequency trading with smallest position sizes.
+   * Captures micro-moves and scalping opportunities.
+   */
+  TIER_4_ULTRA_AGGRESSIVE: {
+    name: 'TIER_4_ULTRA_AGGRESSIVE',
+    displayName: 'Tier 4: Ultra Aggressive',
+    impulsePct: 0.25,          // Minimum 0.25% move (scalping threshold)
+    positionPct: 0.01,        // 1.0% of equity per trade (smaller for more trades)
+    maxPositions: 25,          // Maximum concurrent positions
+    minMlConf: 0.20,           // Minimum ML confidence (20%)
+    description: 'Ultra aggressive tier for scalping 0.25%+ micro-moves',
+    useCase: 'Low volatility, ranging markets, high frequency scalping',
+  },
+
+  /**
    * TIER_3_AGGRESSIVE
    * 
-   * For ranging markets with 1-2% daily moves.
+   * For ranging markets with 0.5-2% daily moves.
    * Higher frequency trading with smaller position sizes.
    * Lower ML confidence threshold to capture more opportunities.
    */
   TIER_3_AGGRESSIVE: {
     name: 'TIER_3_AGGRESSIVE',
     displayName: 'Tier 3: Aggressive',
-    impulsePct: 0.5,           // Minimum price move to trigger signal (AGGRESSIVE: lowered from 1.5%)
-    positionPct: 0.02,         // 2% of equity per trade (AGGRESSIVE: increased from 1%)
-    maxPositions: 20,          // Maximum concurrent positions (AGGRESSIVE: increased from 15)
-    minMlConf: 0.30,           // Minimum ML confidence (30%) - KEPT AS REQUESTED
-    description: 'Aggressive tier for high-frequency trading with 0.5%+ moves',
+    impulsePct: 0.3,           // Minimum price move to trigger signal (LOWERED from 0.5%)
+    positionPct: 0.02,         // 2% of equity per trade
+    maxPositions: 20,          // Maximum concurrent positions
+    minMlConf: 0.30,           // Minimum ML confidence (30%)
+    description: 'Aggressive tier for high-frequency trading with 0.3%+ moves',
     useCase: 'All market conditions, high frequency, aggressive profit-taking',
   },
   
@@ -45,7 +63,7 @@ export const TIERS = {
     name: 'TIER_2_MODERATE',
     displayName: 'Tier 2: Moderate',
     impulsePct: 2.0,           // Minimum price move to trigger signal
-    positionPct: 0.015,        // 1.5% of equity per trade
+    positionPct: 0.01,        // 1.0% of equity per trade
     maxPositions: 10,          // Maximum concurrent positions
     minMlConf: 0.50,           // Minimum ML confidence (50%)
     description: 'Moderate tier for trending markets with 2-3% daily moves',

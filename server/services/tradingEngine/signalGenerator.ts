@@ -176,9 +176,9 @@ export class SignalGenerator {
       const breakoutLevel = Math.max(high12, pdh);
       const distanceToBreakout = ((breakoutLevel - price) / price) * 100;
       
-      // ADJUSTED: Allow anticipatory entry within 0.5% of breakout level
+      // ADJUSTED: Allow anticipatory entry within 2.0% of breakout level
       const isBreakout = price >= breakoutLevel;
-      const isAnticipatory = distanceToBreakout <= 0.5 && distanceToBreakout > 0;
+      const isAnticipatory = distanceToBreakout <= 2.0 && distanceToBreakout > 0;
 
       if (!isBreakout && !isAnticipatory) {
         console.log(`[PlaybookA] ${symbol} - No breakout: Price $${price.toFixed(2)} < $${breakoutLevel.toFixed(2)} (${distanceToBreakout.toFixed(2)}% away)`);
@@ -361,8 +361,8 @@ export class SignalGenerator {
       const pullbackPct = Math.abs((price - extremePrice) / extremePrice) * 100;
 
       // We want a pullback of at least 0.3% but not more than 2% (ADJUSTED: 0.5→0.3 for more signals)
-      if (pullbackPct < 0.3 || pullbackPct > 2.0) {
-        console.log(`[PlaybookC] ${symbol} - Pullback ${pullbackPct.toFixed(2)}% not in range (0.3-2.0%)`);
+      if (pullbackPct < 0.1 || pullbackPct > 2.0) {
+        console.log(`[PlaybookC] ${symbol} - Pullback ${pullbackPct.toFixed(2)}% not in range (0.1-2.0%)`);
         return null;
       }
 

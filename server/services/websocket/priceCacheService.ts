@@ -1,6 +1,16 @@
-import { redis } from '../messageQueue';
+import Redis from 'ioredis';
 import { binanceWebSocketManager } from './binanceWebSocketManager';
 import binanceService from '../binanceService';
+
+// Create Redis client
+const redis = new Redis({
+  host: process.env.REDIS_HOST || 'redis',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  retryStrategy: (times) => {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+});
 
 /**
  * Price Cache Service

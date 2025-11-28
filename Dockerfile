@@ -20,7 +20,7 @@ ENV TFJS_NODE_SKIP_DOWNLOAD=1
 RUN cd server && npm install --legacy-peer-deps --ignore-scripts
 
 # Manually install TensorFlow binaries after npm install
-RUN cd server && npm rebuild @tensorflow/tfjs-node --build-from-source=false || true
+RUN cd server && npm rebuild @tensorflow/tfjs-node --build-from-source=false || true && npm rebuild bcrypt --build-from-source && npm rebuild sqlite3 --build-from-source
 
 # Copy all application code
 ARG CACHEBUST=1
