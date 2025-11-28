@@ -1,0 +1,12 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.0
+
+# Ignore rules
+# Use this section to ignore specific vulnerabilities that are false positives
+# or have been assessed as acceptable risk
+
+ignore: {}
+
+# Patch rules
+# Snyk can automatically apply patches to fix vulnerabilities
+patch: {}

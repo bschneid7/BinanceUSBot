@@ -54,7 +54,9 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.5",
     "cross-env": "^7.0.3",
+    "snyk": "^1.1301.0",
     "tsx": "^4.20.6"
   }
 }
