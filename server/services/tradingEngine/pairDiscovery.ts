@@ -42,7 +42,7 @@ export class PairDiscovery {
 
       // 3. Generate trading pairs for each asset
       const pairs: string[] = [];
-      const exchangeInfo = await exchangeInfoCache.getExchangeInfo();
+      const exchangeInfo = await binanceService.getExchangeInfo();
       const tradingSymbols = new Set(
         exchangeInfo.symbols
           .filter(s => s.status === 'TRADING')

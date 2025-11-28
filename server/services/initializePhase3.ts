@@ -1,6 +1,7 @@
 import logger from '../utils/logger';
 import metricsCollector from './monitoring/metricsCollector';
 import anomalyDetector from './monitoring/anomalyDetector';
+import exchangeFilters from './exchangeFilters';
 
 /**
  * Initialize Phase 3 Infrastructure
@@ -12,6 +13,11 @@ import anomalyDetector from './monitoring/anomalyDetector';
 export async function initializePhase3(): Promise<void> {
   try {
     logger.info('[Phase3] Initializing Phase 3 infrastructure...');
+
+    // Load exchange filters (critical for order validation)
+    logger.info('[Phase3] Loading exchange filters...');
+    await exchangeFilters.loadFilters();
+    logger.info('[Phase3] ✅ Exchange filters loaded');
 
     // Start metrics collection (every 10 seconds)
     metricsCollector.start(10);

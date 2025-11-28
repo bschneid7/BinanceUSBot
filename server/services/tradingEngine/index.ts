@@ -10,6 +10,7 @@ import riskEngine from './riskEngine';
 import executionRouter from './executionRouter';
 import positionManager from './positionManager';
 import reserveManager from './reserveManager';
+import balanceManager from './balanceManager';
 import killSwitch from './killSwitch';
 import binanceService from '../binanceService';
 import lossLimitService from '../lossLimitService';
@@ -648,14 +649,36 @@ export class TradingEngine {
         return;
       }
 
-      // Execute the signal
+      // Execute the signal with balance locking to prevent conflicts
       logger.info(`[TradingEngine] Executing signal: ${signal.symbol} ${signal.action} ${quantity.toFixed(8)} @ $${signal.entryPrice.toFixed(2)}`);
 
-      const orderResult = await executionRouter.executeSignal(
-        userId,
-        signal,
-        quantity
-      );
+      const orderResult = await balanceManager.executeWithLock(async () => {
+        // Reserve balance before placing order
+        const orderId = `${signal.symbol}-${Date.now()}`;
+        const reserved = await balanceManager.reserveBalance(orderId, signal.symbol, notional);
+        
+        if (!reserved) {
+          logger.warn(`[TradingEngine] Insufficient balance for ${signal.symbol} after reservation check`);
+          return {
+            success: false,
+            error: 'Insufficient balance (reserved by other orders)'
+          };
+        }
+        
+        try {
+          // Execute the order
+          const result = await executionRouter.executeSignal(
+            userId,
+            signal,
+            quantity
+          );
+          
+          return result;
+        } finally {
+          // Always release balance reservation
+          balanceManager.releaseBalance(orderId);
+        }
+      });
 
       if (!orderResult.success) {
         await signalGenerator.recordSignal(userId, signal, 'SKIPPED', orderResult.error);
