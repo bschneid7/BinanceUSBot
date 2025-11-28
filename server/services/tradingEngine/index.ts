@@ -934,3 +934,12 @@ export class TradingEngine {
 }
 
 export default new TradingEngine();
+
+// Import tier4Monitor
+import { tier4Monitor } from '../tier4Monitor';
+
+// Start tier4Monitor if TIER_4 is active
+if (process.env.SIGNAL_TIER === 'TIER_4_ULTRA_AGGRESSIVE') {
+  tier4Monitor.start();
+  console.log('[TradingEngine] ✅ TIER_4 Monitor started');
+}

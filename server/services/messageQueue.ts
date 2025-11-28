@@ -32,7 +32,7 @@ class MessageQueueService {
   constructor() {
     this.config = {
       redis: {
-        host: process.env.REDIS_HOST || 'localhost',
+        host: process.env.REDIS_HOST || 'binance-bot-redis',
         port: parseInt(process.env.REDIS_PORT || '6379'),
         password: process.env.REDIS_PASSWORD,
       },
