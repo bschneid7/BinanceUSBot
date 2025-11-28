@@ -38,6 +38,7 @@ import snapshotRoutes from './routes/snapshotRoutes';
 import adminRoutes from './routes/adminRoutes';
 import phase2Routes from './routes/phase2Routes';
 import phase3Routes from './routes/phase3Routes';
+import positionImportRoute from './routes/positionImportRoute';
 import { connectDB } from './config/database';
 import { initializeSnapshotCron } from './utils/snapshotCron';
 // import { initializeDailyReportCron } from './cron/dailyReportCron';
@@ -160,6 +161,8 @@ app.use('/api/rate-limit', rateLimitRoutes);
 app.use('/api/phase2', phase2Routes);
 // Phase 3 Routes (Monitoring, Prediction, Alerts)
 app.use('/api/phase3', phase3Routes);
+// Position Import Routes
+app.use('/api/position-import', positionImportRoute);
 // Prometheus Metrics Endpoint
 app.get('/metrics', async (req: Request, res: Response) => {
   try {
