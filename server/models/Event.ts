@@ -44,7 +44,7 @@ const EventSchema = new Schema<IEvent>(
       type: String,
       required: true,
       index: true,
-      enum: ['Position', 'Order', 'Signal', 'System', 'Reconciliation'],
+      enum: ['Position', 'Order', 'Signal', 'System', 'Reconciliation', 'CircuitBreaker'],
     },
     timestamp: {
       type: Date,
@@ -55,7 +55,7 @@ const EventSchema = new Schema<IEvent>(
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,  // Optional for system events
       index: true,
     },
     data: {

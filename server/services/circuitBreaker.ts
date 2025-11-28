@@ -1,5 +1,5 @@
 import logger from "../utils/logger";
-import { alertService } from "./alertService";
+import alertService from "./alertService";
 import eventStore from "./eventStore";
 
 type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
@@ -143,7 +143,7 @@ export class CircuitBreaker {
       logger.info(`Circuit breaker [${this.name}] state changed: ${oldState} -> ${newState}`);
       
       // Record state change event
-      eventStore.record({
+      eventStore.recordEvent({
         type: 'CircuitBreakerStateChanged',
         aggregateType: 'CircuitBreaker',
         aggregateId: this.name,
@@ -222,3 +222,41 @@ export const databaseCircuitBreaker = new CircuitBreaker("Database", {
   successThreshold: 2,
   timeout: 30000 // 30 seconds
 });
+
+// Circuit Breaker Manager for Phase 2
+class CircuitBreakerManager {
+  private breakers: Map<string, CircuitBreaker> = new Map();
+
+  constructor() {
+    // Register existing circuit breakers
+    this.breakers.set('BinanceAPI', binanceApiCircuitBreaker);
+    this.breakers.set('MLModel', mlModelCircuitBreaker);
+    this.breakers.set('Database', databaseCircuitBreaker);
+  }
+
+  getHealthStatus() {
+    const status: any = {};
+    for (const [name, breaker] of this.breakers) {
+      status[name] = breaker.getStats();
+    }
+    return status;
+  }
+
+  isAllHealthy(): boolean {
+    for (const breaker of this.breakers.values()) {
+      if (!breaker.isAllowingRequests()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  resetAll(): void {
+    for (const breaker of this.breakers.values()) {
+      breaker.reset();
+    }
+  }
+}
+
+export const circuitBreakerManager = new CircuitBreakerManager();
+export default circuitBreakerManager;

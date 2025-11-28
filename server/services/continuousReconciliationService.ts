@@ -119,7 +119,7 @@ class ContinuousReconciliationService {
       logger.info('[ContinuousReconciliation] Starting reconciliation run...');
 
       // Record reconciliation start event
-      await eventStore.record({
+      await eventStore.recordEvent({
         type: 'ReconciliationStarted',
         aggregateType: 'System',
         aggregateId: 'reconciliation',
@@ -148,7 +148,7 @@ class ContinuousReconciliationService {
       const duration = Date.now() - startTime;
 
       // Record reconciliation complete event
-      await eventStore.record({
+      await eventStore.recordEvent({
         type: 'ReconciliationCompleted',
         aggregateType: 'System',
         aggregateId: 'reconciliation',
@@ -179,7 +179,7 @@ class ContinuousReconciliationService {
     } catch (error: any) {
       logger.error('[ContinuousReconciliation] Reconciliation failed:', error);
 
-      await eventStore.record({
+      await eventStore.recordEvent({
         type: 'ReconciliationFailed',
         aggregateType: 'System',
         aggregateId: 'reconciliation',
@@ -375,7 +375,7 @@ class ContinuousReconciliationService {
     );
 
     // Record discrepancy event
-    await eventStore.record({
+    await eventStore.recordEvent({
       type: 'DiscrepancyFixed',
       aggregateType: 'Position',
       aggregateId: position._id.toString(),
@@ -407,7 +407,7 @@ class ContinuousReconciliationService {
     );
 
     // Record discrepancy event
-    await eventStore.record({
+    await eventStore.recordEvent({
       type: 'DiscrepancyFixed',
       aggregateType: 'Position',
       aggregateId: position._id.toString(),
@@ -447,7 +447,7 @@ class ContinuousReconciliationService {
     );
 
     // Record discrepancy event
-    await eventStore.record({
+    await eventStore.recordEvent({
       type: 'DiscrepancyFixed',
       aggregateType: 'Order',
       aggregateId: order._id.toString(),

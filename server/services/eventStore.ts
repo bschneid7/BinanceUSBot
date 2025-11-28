@@ -12,8 +12,8 @@ import logger from '../utils/logger';
 export interface RecordEventParams {
   type: string;
   aggregateId: string;
-  aggregateType: 'Position' | 'Order' | 'Signal' | 'System' | 'Reconciliation';
-  userId: Types.ObjectId;
+  aggregateType: 'Position' | 'Order' | 'Signal' | 'System' | 'Reconciliation' | 'CircuitBreaker';
+  userId?: Types.ObjectId;  // Optional for system events
   data: any;
   correlationId?: string;
   causationId?: string;
