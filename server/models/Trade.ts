@@ -2,15 +2,15 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ITrade extends Document {
   symbol: string;
-  side: 'BUY' | 'SELL';
-  playbook: 'A' | 'B' | 'C' | 'D';
+  side: 'BUY' | 'SELL' | 'LONG' | 'SHORT';
+  playbook: 'A' | 'B' | 'C' | 'D' | 'MANUAL' | 'REBALANCE' | 'RECONCILIATION';
   entry_price: number;
   exit_price: number;
   quantity: number;
   pnl_usd: number;
   pnl_r: number;
   fees: number;
-  hold_time: string;
+  hold_time?: string;
   outcome: 'WIN' | 'LOSS' | 'BREAKEVEN';
   notes?: string;
   date: Date;
@@ -25,12 +25,12 @@ const schema = new Schema<ITrade>({
   },
   side: {
     type: String,
-    enum: ['BUY', 'SELL'],
+    enum: ['BUY', 'SELL', 'LONG', 'SHORT'],
     required: true,
   },
   playbook: {
     type: String,
-    enum: ['A', 'B', 'C', 'D'],
+    enum: ['A', 'B', 'C', 'D', 'MANUAL', 'REBALANCE', 'RECONCILIATION'],
     required: true,
     index: true,
   },
@@ -61,7 +61,7 @@ const schema = new Schema<ITrade>({
   },
   hold_time: {
     type: String,
-    required: true,
+    required: false,
   },
   outcome: {
     type: String,

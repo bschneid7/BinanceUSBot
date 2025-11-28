@@ -132,9 +132,9 @@ export class ReserveRebalancer {
       logger.info('[ReserveRebalancer] Positions sorted by P&L:', 
         sortedPositions.map(p => ({
           symbol: p.symbol,
-          notional: p.notionalValue.toFixed(2),
-          pnl: p.unrealizedPnL.toFixed(2),
-          pnlPct: ((p.unrealizedPnL / p.notionalValue) * 100).toFixed(2) + '%',
+          notional: (p.notionalValue || 0).toFixed(2),
+          pnl: (p.unrealizedPnL || 0).toFixed(2),
+          pnlPct: p.notionalValue ? ((p.unrealizedPnL / p.notionalValue) * 100).toFixed(2) + '%' : 'N/A',
         }))
       );
 
@@ -148,12 +148,15 @@ export class ReserveRebalancer {
         }
 
         try {
-          logger.info(`[ReserveRebalancer] Closing position ${position.symbol} (notional: $${position.notionalValue.toFixed(2)}, P&L: $${position.unrealizedPnL.toFixed(2)})`);
+          const notional = position.notionalValue || 0;
+          const pnl = position.unrealizedPnL || 0;
+          
+          logger.info(`[ReserveRebalancer] Closing position ${position.symbol} (notional: $${notional.toFixed(2)}, P&L: $${pnl.toFixed(2)})`);
           
           // Close the position
           await positionManager.closePosition(position._id, 'REBALANCE');
           
-          raised += position.notionalValue;
+          raised += notional;
           closedCount++;
 
           logger.info(`[ReserveRebalancer] ✅ Closed ${position.symbol}, raised $${raised.toFixed(2)} / $${amountToRaise.toFixed(2)}`);
